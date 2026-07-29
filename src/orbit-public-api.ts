@@ -84,6 +84,12 @@ function toSafeMessage(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 2000);
 }
 
+function rejectRedirect(response: Response, label: string): void {
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(`${label} attempted an HTTP redirect, which is not allowed.`);
+  }
+}
+
 function resolvePointer(document: OpenApiDocument, reference: string): unknown {
   if (!reference.startsWith("#/")) {
     throw new Error(`Only local OpenAPI references are supported: ${reference}`);
@@ -349,9 +355,10 @@ export class OrbitPublicApi {
     try {
       const response = await this.fetchWithTimeout(
         ORBIT_OPENAPI_URL,
-        { method: "GET", headers: { accept: "application/json" }, redirect: "error" },
+        { method: "GET", headers: { accept: "application/json" }, redirect: "manual" },
         REQUEST_TIMEOUT_MS,
       );
+      rejectRedirect(response, "Orbit OpenAPI");
       if (!response.ok) throw new Error(`Orbit OpenAPI returned HTTP ${response.status}.`);
       const document = (await readJsonResponse(response, CONTRACT_MAX_BYTES)) as OpenApiDocument;
       const nextCache = { loadedAt: now, document, operations: normalizeContract(document) };
@@ -416,9 +423,10 @@ export class OrbitPublicApi {
     );
     const response = await this.fetchWithTimeout(
       url,
-      { method: "GET", headers: { accept: "application/json" }, redirect: "error" },
+      { method: "GET", headers: { accept: "application/json" }, redirect: "manual" },
       REQUEST_TIMEOUT_MS,
     );
+    rejectRedirect(response, `Orbit operation ${descriptor.operationId}`);
     const body = await readJsonResponse(response, RESPONSE_MAX_BYTES);
 
     const result: OrbitPublicApiResult = {

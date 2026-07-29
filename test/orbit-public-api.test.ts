@@ -80,6 +80,7 @@ test("lists only public JSON GET operations", async () => {
 
   assert.deepEqual(operationIds, ["getPublicRecord", "listPublicFeed"]);
   assert.equal(calls[0]?.url, ORBIT_OPENAPI_URL);
+  assert.equal(calls[0]?.init?.redirect, "manual");
 });
 
 test("calls a public operation without credentials and preserves cursor", async () => {
@@ -102,6 +103,7 @@ test("calls a public operation without credentials and preserves cursor", async 
   assert.equal(calls[1]?.url, `${ORBIT_API_BASE}/feed?limit=20&cursor=opaque.cursor.value`);
   const headers = new Headers(calls[1]?.init?.headers);
   assert.equal(headers.get("authorization"), null);
+  assert.equal(calls[1]?.init?.redirect, "manual");
   assert.equal(result.status, 200);
   assert.equal(result.requestId, "req_test");
 });
@@ -157,4 +159,25 @@ test("rejects a contract that changes the production origin", async () => {
   const api = new OrbitPublicApi(async () => jsonResponse(poisoned));
 
   await assert.rejects(() => api.run({ action: "list" }), /server origin/u);
+});
+
+
+test("rejects redirects while loading the OpenAPI contract", async () => {
+  const api = new OrbitPublicApi(async () =>
+    new Response(null, { status: 302, headers: { location: "https://attacker.example/openapi.json" } }),
+  );
+
+  await assert.rejects(() => api.run({ action: "list" }), /redirect/u);
+});
+
+test("rejects redirects from Orbit API operations", async () => {
+  const api = new OrbitPublicApi(async (input) => {
+    if (String(input) === ORBIT_OPENAPI_URL) return jsonResponse(contract);
+    return new Response(null, { status: 307, headers: { location: "https://attacker.example/feed" } });
+  });
+
+  await assert.rejects(
+    () => api.run({ action: "call", operationId: "listPublicFeed" }),
+    /redirect/u,
+  );
 });
