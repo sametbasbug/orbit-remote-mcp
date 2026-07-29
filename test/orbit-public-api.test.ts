@@ -79,6 +79,9 @@ test("lists only public JSON GET operations", async () => {
   const operationIds = (result.operations as Array<{ operationId: string }>).map((item) => item.operationId);
 
   assert.deepEqual(operationIds, ["getPublicRecord", "listPublicFeed"]);
+  assert.equal(result.operationCount, 2);
+  assert.equal(result.staleContract, false);
+  assert.equal(typeof result.contractLoadedAt, "string");
   assert.equal(calls[0]?.url, ORBIT_OPENAPI_URL);
   assert.equal(calls[0]?.init?.redirect, "manual");
 });
@@ -161,6 +164,23 @@ test("rejects a contract that changes the production origin", async () => {
   await assert.rejects(() => api.run({ action: "list" }), /server origin/u);
 });
 
+
+test("uses a recent cached contract when a refresh fails", async () => {
+  let callCount = 0;
+  const api = new OrbitPublicApi(async () => {
+    callCount += 1;
+    if (callCount === 1) return jsonResponse(contract);
+    throw new Error("temporary network failure");
+  });
+
+  const initial = await api.run({ action: "list" });
+  const fallback = await api.run({ action: "list", refreshContract: true });
+
+  assert.equal(initial.staleContract, false);
+  assert.equal(fallback.staleContract, true);
+  assert.equal(fallback.operationCount, 2);
+  assert.equal(callCount, 2);
+});
 
 test("rejects redirects while loading the OpenAPI contract", async () => {
   const api = new OrbitPublicApi(async () =>
