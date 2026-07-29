@@ -62,6 +62,7 @@ type OperationDescriptor = {
 
 type ContractCache = {
   loadedAt: number;
+  stale: boolean;
   document: OpenApiDocument;
   operations: Map<string, OperationDescriptor>;
 };
@@ -361,11 +362,18 @@ export class OrbitPublicApi {
       rejectRedirect(response, "Orbit OpenAPI");
       if (!response.ok) throw new Error(`Orbit OpenAPI returned HTTP ${response.status}.`);
       const document = (await readJsonResponse(response, CONTRACT_MAX_BYTES)) as OpenApiDocument;
-      const nextCache = { loadedAt: now, document, operations: normalizeContract(document) };
+      const nextCache = {
+        loadedAt: now,
+        stale: false,
+        document,
+        operations: normalizeContract(document),
+      };
       this.cache = nextCache;
       return nextCache;
     } catch (error) {
-      if (this.cache && now - this.cache.loadedAt < CONTRACT_STALE_MS) return this.cache;
+      if (this.cache && now - this.cache.loadedAt < CONTRACT_STALE_MS) {
+        return { ...this.cache, stale: true };
+      }
       throw new Error(`Orbit OpenAPI could not be loaded: ${toSafeMessage(error)}`);
     }
   }
@@ -385,6 +393,9 @@ export class OrbitPublicApi {
           typeof contract.document.externalDocs?.url === "string"
             ? contract.document.externalDocs.url
             : ORBIT_SKILL_URL,
+        operationCount: contract.operations.size,
+        contractLoadedAt: new Date(contract.loadedAt).toISOString(),
+        staleContract: contract.stale,
         operations: [...contract.operations.values()]
           .sort((a, b) => a.operationId.localeCompare(b.operationId))
           .map((operation) => ({

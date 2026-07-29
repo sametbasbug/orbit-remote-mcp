@@ -3,9 +3,23 @@ import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
 
 import { OrbitPublicApi, ORBIT_OPENAPI_URL, ORBIT_SKILL_URL } from "./orbit-public-api";
+import {
+  FALLBACK_MCP_URL,
+  PRIMARY_MCP_URL,
+  SERVICE_DISPLAY_NAME,
+  SERVICE_MODE,
+  SERVICE_NAME,
+  SERVICE_VERSION,
+} from "./service-metadata";
 
 const orbit = new OrbitPublicApi();
 const mcpHandler = createMcpHandler(createServer);
+
+const JSON_SECURITY_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+} as const;
 
 function textResult(value: unknown) {
   return {
@@ -18,10 +32,14 @@ function textResult(value: unknown) {
   };
 }
 
+function safeErrorMessage(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 1000);
+}
+
 function createServer() {
   const server = new McpServer({
-    name: "Orbit Public MCP",
-    version: "0.1.0",
+    name: SERVICE_DISPLAY_NAME,
+    version: SERVICE_VERSION,
   });
 
   server.registerTool(
@@ -51,10 +69,7 @@ function createServer() {
       } catch (error) {
         return {
           isError: true,
-          ...textResult({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          }),
+          ...textResult({ ok: false, error: safeErrorMessage(error) }),
         };
       }
     },
@@ -63,40 +78,108 @@ function createServer() {
   return server;
 }
 
+function rootResponse(): Response {
+  return Response.json(
+    {
+      ok: true,
+      service: SERVICE_NAME,
+      version: SERVICE_VERSION,
+      mode: SERVICE_MODE,
+      mcpEndpoint: PRIMARY_MCP_URL,
+      fallbackMcpEndpoint: FALLBACK_MCP_URL,
+      healthEndpoint: "/health",
+      orbitOpenApi: ORBIT_OPENAPI_URL,
+      orbitGuide: ORBIT_SKILL_URL,
+    },
+    {
+      headers: {
+        ...JSON_SECURITY_HEADERS,
+        "cache-control": "public, max-age=300",
+      },
+    },
+  );
+}
+
+async function healthResponse(refreshContract: boolean): Promise<Response> {
+  try {
+    const contract = await orbit.run({ action: "list", refreshContract });
+    const operations = Array.isArray(contract.operations) ? contract.operations : [];
+
+    return Response.json(
+      {
+        ok: true,
+        service: SERVICE_NAME,
+        version: SERVICE_VERSION,
+        mode: SERVICE_MODE,
+        checkedAt: new Date().toISOString(),
+        mcpEndpoint: PRIMARY_MCP_URL,
+        orbit: {
+          status: "reachable",
+          contractVersion: contract.contractVersion ?? null,
+          contractUrl: contract.contractUrl ?? ORBIT_OPENAPI_URL,
+          guideUrl: contract.guideUrl ?? ORBIT_SKILL_URL,
+          operationCount: operations.length,
+          staleContract: contract.staleContract === true,
+          contractLoadedAt: contract.contractLoadedAt ?? null,
+        },
+      },
+      {
+        headers: {
+          ...JSON_SECURITY_HEADERS,
+          "cache-control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    return Response.json(
+      {
+        ok: false,
+        service: SERVICE_NAME,
+        version: SERVICE_VERSION,
+        mode: SERVICE_MODE,
+        checkedAt: new Date().toISOString(),
+        orbit: {
+          status: "unreachable",
+          error: safeErrorMessage(error),
+        },
+      },
+      {
+        status: 503,
+        headers: {
+          ...JSON_SECURITY_HEADERS,
+          "cache-control": "no-store",
+        },
+      },
+    );
+  }
+}
+
 export default {
-  fetch(request, env, ctx) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
       return mcpHandler(request, env, ctx);
     }
 
-    if (url.pathname === "/" || url.pathname === "/health") {
-      return Response.json(
-        {
-          ok: true,
-          service: "orbit-remote-mcp",
-          version: "0.1.0",
-          mode: "public-read-only",
-          mcpEndpoint: "/mcp",
-          orbitOpenApi: ORBIT_OPENAPI_URL,
-          orbitGuide: ORBIT_SKILL_URL,
-        },
-        {
-          headers: {
-            "cache-control": "public, max-age=60",
-            "x-content-type-options": "nosniff",
-          },
-        },
-      );
+    if (url.pathname === "/") return rootResponse();
+
+    if (url.pathname === "/health") {
+      return healthResponse(url.searchParams.get("refresh") === "1");
     }
 
     if (url.pathname === "/robots.txt") {
       return new Response("User-agent: *\nDisallow: /\n", {
-        headers: { "content-type": "text/plain; charset=utf-8" },
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "x-content-type-options": "nosniff",
+        },
       });
     }
 
-    return new Response("Not found", { status: 404 });
+    return new Response("Not found", {
+      status: 404,
+      headers: { "x-content-type-options": "nosniff" },
+    });
   },
 } satisfies ExportedHandler;

@@ -1,6 +1,6 @@
 {
   "name": "orbit-remote-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Public read-only remote MCP bridge for Equinox Orbit.",
   "author": "Samet Başbuğ",
@@ -8,10 +8,12 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist/worker",
     "deploy": "wrangler deploy",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "smoke:live": "tsx scripts/live-smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0-beta.5",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260729.1",
+    "@modelcontextprotocol/client": "2.0.0-beta.5",
     "@types/node": "26.0.1",
     "tsx": "4.23.1",
     "typescript": "6.0.3",
