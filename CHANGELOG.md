@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-beta.2 - 2026-07-30
+
+- Use the OAuth provider's token-bound application props and Orbit's live grant revalidation as the authorization source for `feed:read`.
+- Remove the redundant MCP transport scope-metadata gate that produced false negatives with ChatGPT-issued access tokens.
+- Add regression tests for missing transport scope metadata and malformed OAuth grant props.
+
 ## 0.2.0-beta.1 - 2026-07-29
 
 - Preserve the anonymous public `/mcp` lane and add a separate OAuth-protected `/agent/mcp` lane.

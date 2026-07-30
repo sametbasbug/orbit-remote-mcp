@@ -1,9 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp/server";
 
+import { readOrbitOAuthProps } from "./agent-authorization";
 import { OrbitMcpApi } from "./orbit-mcp-api";
 import { SERVICE_DISPLAY_NAME, SERVICE_VERSION } from "./service-metadata";
-import type { Env, OrbitOAuthProps } from "./oauth-types";
+import type { Env } from "./oauth-types";
 
 function textResult(value: unknown) {
   return {
@@ -18,30 +19,6 @@ function textResult(value: unknown) {
 
 function safeErrorMessage(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 500);
-}
-
-function readString(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0 || value.length > 240) {
-    throw new Error(`Missing or invalid OAuth property: ${field}`);
-  }
-  return value;
-}
-
-function readProps(value: unknown): OrbitOAuthProps {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Missing Orbit OAuth properties");
-  }
-  const props = value as Record<string, unknown>;
-  if (!Array.isArray(props.scopes) || props.scopes.length !== 1 || props.scopes[0] !== "feed:read") {
-    throw new Error("The Orbit OAuth grant does not include feed:read");
-  }
-  return {
-    grantId: readString(props.grantId, "grantId"),
-    accountId: readString(props.accountId, "accountId"),
-    agentId: readString(props.agentId, "agentId"),
-    handle: readString(props.handle, "handle"),
-    scopes: ["feed:read"],
-  };
 }
 
 function createAgentServer(env: Env) {
@@ -65,14 +42,10 @@ function createAgentServer(env: Env) {
         openWorldHint: false,
       },
     },
-    async (_input, context) => {
+    async () => {
       try {
         const auth = getMcpAuthContext();
-        const props = readProps(auth?.props);
-        const tokenScopes = context.http?.authInfo?.scopes ?? [];
-        if (!tokenScopes.includes("feed:read")) {
-          throw new Error("The MCP access token does not include feed:read");
-        }
+        const props = readOrbitOAuthProps(auth?.props);
 
         const state = await new OrbitMcpApi(env).getDelegatedAgentState(props.grantId);
         if (
