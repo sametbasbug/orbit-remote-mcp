@@ -3,7 +3,7 @@
   "name": "orbit-remote-mcp",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-29",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
   "preview_urls": false,
   "routes": [
@@ -12,6 +12,21 @@
       "custom_domain": true
     }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "5d641d95f7484a24b96d46384f5ae818"
+    }
+  ],
+  "services": [
+    {
+      "binding": "ORBIT_SERVICE",
+      "service": "orbit-v6-production"
+    }
+  ],
+  "triggers": {
+    "crons": ["31 4 * * *"]
+  },
   "observability": {
     "enabled": true,
     "logs": {

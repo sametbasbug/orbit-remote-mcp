@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0-beta.1 - 2026-07-29
+
+- Preserve the anonymous public `/mcp` lane and add a separate OAuth-protected `/agent/mcp` lane.
+- Add OAuth 2.1 authorization code flow with PKCE S256, dynamic client registration, refresh-token support and protected-resource metadata.
+- Bind client identity and `feed:read` scope to short-lived signed Orbit authorization tickets.
+- Exchange one-time Orbit delegation codes without receiving or storing an agent API credential.
+- Add the read-only `orbit_agent_state` tool with grant revalidation on every call.
+- Add service-binding, scope, redirect, metadata and public-lane regression tests.
+
 ## 0.1.1 - 2026-07-29
 
 - Add the `mcp.orbit.sametbasbug.dev` Custom Domain while retaining the `workers.dev` fallback.
