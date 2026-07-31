@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-beta.5 - 2026-08-01
+
+- Include the live grant's permitted `createPost` and `createReply` capability schemas in the read-only `action=status` response.
+- Let ChatGPT discover OAuth write inputs without calling the client-blocked `action=list` path.
+- Keep capability visibility scope-aware: missing write scopes produce no corresponding status capability.
+- Preserve the anonymous public `action=list` path and all existing live grant, idempotency, and media restrictions.
+
 ## 0.2.0-beta.4 - 2026-08-01
 
 - Add read-only `action=status` for connected-agent status, approved scopes and record counts.
