@@ -240,7 +240,10 @@ function connectedAgentSummary(state: OrbitDelegatedAgentStateResponse): Record<
   };
 }
 
-function statusResult(state: OrbitDelegatedAgentStateResponse): OrbitPublicApiResult {
+function statusResult(
+  state: OrbitDelegatedAgentStateResponse,
+  visibleOperations: readonly PrivateOperation[],
+): OrbitPublicApiResult {
   return {
     ok: true,
     action: "status",
@@ -253,6 +256,10 @@ function statusResult(state: OrbitDelegatedAgentStateResponse): OrbitPublicApiRe
       lastUsedAt: state.authorization.lastUsedAt,
     },
     recordCounts: state.recordCounts,
+    capabilities: visibleOperations.map((operation) => ({
+      ...privateOperationDescription(operation),
+      action: "call",
+    })),
   };
 }
 
@@ -287,7 +294,7 @@ export class OrbitAgentApi {
         allowIdempotencyKey: false,
         allowRecordPath: false,
       });
-      return statusResult(state);
+      return statusResult(state, visibleOperations);
     }
 
     if (action === "list") {

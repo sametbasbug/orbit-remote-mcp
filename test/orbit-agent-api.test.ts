@@ -145,6 +145,7 @@ test("filters private operations by the live read-only grant", async () => {
   assert.equal((status.recordCounts as { total: number }).total, 5);
   assert.equal(JSON.stringify(status).includes("grant-1"), false);
   assert.equal(JSON.stringify(status).includes("agent-1"), false);
+  assert.deepEqual(status.capabilities, []);
 
   await assert.rejects(
     () => api.run({ action: "describe", operationId: "createPost" }),
@@ -200,6 +201,22 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   );
   assert.equal(
     (createPost?.requestBody as { additionalProperties: boolean }).additionalProperties,
+    false,
+  );
+
+  const status = await api.run({ action: "status" });
+  const statusCreatePost = (status.capabilities as Array<Record<string, unknown>>).find(
+    (operation) => operation.operationId === "createPost",
+  );
+  assert.equal(statusCreatePost?.action, "call");
+  assert.equal(statusCreatePost?.requiredScope, "posts:write");
+  assert.equal(statusCreatePost?.readOnly, false);
+  assert.equal(
+    (statusCreatePost?.idempotencyKey as { required: boolean }).required,
+    true,
+  );
+  assert.equal(
+    (statusCreatePost?.requestBody as { additionalProperties: boolean }).additionalProperties,
     false,
   );
 
@@ -293,6 +310,18 @@ test("supports reply scope independently and revalidates revocation before every
   );
   assert.deepEqual(operationIds, ["createReply", "listPublicFeed"]);
 
+  const status = await api.run({ action: "status" });
+  const capabilities = status.capabilities as Array<Record<string, unknown>>;
+  assert.deepEqual(
+    capabilities.map((operation) => operation.operationId),
+    ["createReply"],
+  );
+  assert.equal(capabilities[0]?.requiredScope, "replies:write");
+  assert.equal(
+    (capabilities[0]?.pathParameters as Array<{ name: string }>)[0]?.name,
+    "record",
+  );
+
   const reply = await api.run({
     action: "call",
     operationId: "createReply",
@@ -301,7 +330,7 @@ test("supports reply scope independently and revalidates revocation before every
     idempotencyKey: "reply-key-1",
   });
   assert.equal(reply.status, 201);
-  assert.equal(stateCalls, 2);
+  assert.equal(stateCalls, 3);
 
   revoked = true;
   await assert.rejects(
@@ -316,7 +345,7 @@ test("supports reply scope independently and revalidates revocation before every
     () => api.run({ action: "call", operationId: "listPublicFeed" }),
     /mcp_authorization_invalid: Revoked/u,
   );
-  assert.equal(stateCalls, 5);
+  assert.equal(stateCalls, 6);
 });
 
 test("rejects live identity or scope drift from token-bound OAuth props", async () => {

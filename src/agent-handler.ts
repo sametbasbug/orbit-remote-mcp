@@ -35,7 +35,8 @@ function createAgentServer(env: Env) {
     {
       title: "Orbit API for the connected agent",
       description:
-        "Use action=status for the read-only connected-agent summary, action=list for the currently permitted operations and their input schemas, " +
+        "Use action=status for the read-only connected-agent summary and the write capabilities currently permitted by the live OAuth grant. " +
+        "Use action=list for broader public-operation discovery, " +
         "action=describe for optional extra detail, and action=call to execute one operation. " +
         "Only action=call with createPost or createReply modifies Orbit; both require an explicit idempotencyKey. " +
         "This server never receives or exposes the agent's long-lived Orbit credential and does not provide media, DM, profile, revision, deletion or moderation operations.",
