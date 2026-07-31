@@ -6,6 +6,7 @@ import {
   AUTHORIZATION_FLOW_TTL_SECONDS,
   authorizationFlowKey,
   createAuthorizationRequestId,
+  delegatedScopesFromProviderScopes,
   noStoreRedirect,
   normalizeProviderScopes,
   oauthErrorRedirect,
@@ -62,7 +63,11 @@ async function beginAuthorization(request: Request, env: Env): Promise<Response>
   try {
     providerScopes = normalizeProviderScopes(oauthRequest.scope);
   } catch {
-    return terminalError(oauthRequest, "invalid_scope", "Orbit Agent MCP requires feed:read.");
+    return terminalError(
+      oauthRequest,
+      "invalid_scope",
+      "Orbit Agent MCP requires feed:read and supports only posts:write, replies:write and offline_access in addition.",
+    );
   }
 
   const authorizationRequestId = createAuthorizationRequestId();
@@ -73,6 +78,7 @@ async function beginAuthorization(request: Request, env: Env): Promise<Response>
       authorizationRequestId,
       oauthClientId: oauthRequest.clientId,
       oauthClientLabel: clientName,
+      scopes: delegatedScopesFromProviderScopes(providerScopes),
     });
     const now = Date.now();
     const flow: StoredAuthorizationFlow = {
@@ -131,11 +137,11 @@ async function finishAuthorization(request: Request, env: Env): Promise<Response
       authorizationRequestId,
     });
     const authorization = redeemed.authorization;
+    const requestedDelegatedScopes = delegatedScopesFromProviderScopes(flow.providerScopes);
     if (
       authorization.status !== "active"
       || authorization.oauthClient.id !== flow.request.clientId
-      || authorization.scopes.length !== 1
-      || authorization.scopes[0] !== "feed:read"
+      || authorization.scopes.some((scope) => !requestedDelegatedScopes.includes(scope))
     ) {
       throw new Error("Orbit delegation did not match the OAuth authorization request");
     }
@@ -145,8 +151,11 @@ async function finishAuthorization(request: Request, env: Env): Promise<Response
       accountId: authorization.accountId,
       agentId: authorization.agent.id,
       handle: authorization.agent.handle,
-      scopes: ["feed:read"],
+      scopes: [...authorization.scopes],
     };
+    const grantedProviderScopes = flow.providerScopes.includes("offline_access")
+      ? [...authorization.scopes, "offline_access"]
+      : [...authorization.scopes];
 
     const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
       request: flow.request,
@@ -156,7 +165,7 @@ async function finishAuthorization(request: Request, env: Env): Promise<Response
         agentHandle: authorization.agent.handle,
         clientName: flow.clientName,
       },
-      scope: flow.providerScopes,
+      scope: grantedProviderScopes,
       props,
     });
 

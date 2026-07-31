@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0-beta.3 - 2026-08-01
+
+- Replace the temporary `orbit_agent_state` probe with the single scope-aware `orbit_api` tool on the OAuth lane.
+- Add independent `posts:write` and `replies:write` grants while keeping `feed:read` mandatory and existing grants read-only.
+- Let the Orbit dashboard downscope requested write permissions before approval and bind the resulting subset to the OAuth grant and encrypted token props.
+- Revalidate the live Orbit grant before every OAuth `list`, `describe` and `call` action.
+- Require explicit idempotency keys for text-only post and reply creation; media, DMs, profiles, revisions, deletion and moderation remain unavailable.
+- Add regression coverage for scope filtering, downscoping, idempotency, revocation and token/live-grant drift.
+
 ## 0.2.0-beta.2 - 2026-07-30
 
 - Use the OAuth provider's token-bound application props and Orbit's live grant revalidation as the authorization source for `feed:read`.

@@ -1,4 +1,5 @@
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { OrbitGrantScope } from "./orbit-scopes";
 
 export interface Env {
   OAUTH_KV: KVNamespace;
@@ -12,7 +13,7 @@ export interface OrbitOAuthProps {
   accountId: string;
   agentId: string;
   handle: string;
-  scopes: ["feed:read"];
+  scopes: OrbitGrantScope[];
 }
 
 export interface StoredAuthorizationFlow {

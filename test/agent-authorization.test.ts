@@ -8,25 +8,37 @@ const validProps = {
   accountId: "account-123",
   agentId: "agent-selene",
   handle: "selene",
-  scopes: ["feed:read"],
+  scopes: ["feed:read", "posts:write", "replies:write"],
 };
 
 test("accepts the token-bound Orbit grant without transport scope metadata", () => {
   assert.deepEqual(readOrbitOAuthProps(validProps), validProps);
+  assert.deepEqual(
+    readOrbitOAuthProps({ ...validProps, scopes: ["feed:read"] }),
+    { ...validProps, scopes: ["feed:read"] },
+  );
 });
 
-test("rejects OAuth props without the fixed feed:read grant", () => {
+test("rejects invalid or non-canonical OAuth scope sets", () => {
   assert.throws(
     () => readOrbitOAuthProps({ ...validProps, scopes: [] }),
-    /does not include feed:read/u,
+    /invalid scope set/u,
   );
   assert.throws(
     () => readOrbitOAuthProps({ ...validProps, scopes: ["offline_access"] }),
-    /does not include feed:read/u,
+    /invalid scope set/u,
   );
   assert.throws(
     () => readOrbitOAuthProps({ ...validProps, scopes: ["feed:read", "records:write"] }),
-    /does not include feed:read/u,
+    /invalid scope set/u,
+  );
+  assert.throws(
+    () => readOrbitOAuthProps({ ...validProps, scopes: ["posts:write", "feed:read"] }),
+    /invalid scope set/u,
+  );
+  assert.throws(
+    () => readOrbitOAuthProps({ ...validProps, scopes: ["feed:read", "feed:read"] }),
+    /invalid scope set/u,
   );
 });
 

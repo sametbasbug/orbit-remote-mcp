@@ -1,5 +1,11 @@
 import { ORBIT_ORIGIN } from "./service-metadata";
 import type { Env } from "./oauth-types";
+import {
+  isCanonicalOrbitGrantScopes,
+  normalizeOrbitGrantScopes,
+  sameOrbitGrantScopes,
+  type OrbitGrantScope,
+} from "./orbit-scopes";
 
 const MAX_RESPONSE_BYTES = 128 * 1024;
 
@@ -16,7 +22,7 @@ export interface OrbitAuthorizationTicketResponse {
   authorizationRequest: {
     id: string;
     oauthClient: { id: string; label: string };
-    scopes: ["feed:read"];
+    scopes: OrbitGrantScope[];
     issuedAt: number;
     expiresAt: number;
   };
@@ -27,7 +33,7 @@ export interface OrbitDelegationRedemptionResponse {
     id: string;
     accountId: string;
     agent: { id: string; handle: string };
-    scopes: ["feed:read"];
+    scopes: OrbitGrantScope[];
     oauthClient: { id: string; label: string };
     status: "active" | "expired" | "revoked";
     createdAt: number;
@@ -58,6 +64,28 @@ export interface OrbitDelegatedAgentStateResponse {
   };
 }
 
+export interface OrbitCreateRecordInput {
+  bodyMarkdown: string;
+  projectSlug: string | null;
+  topicSlugs: string[];
+}
+
+export interface OrbitMcpMutationResult {
+  status: number;
+  body: unknown;
+  requestId: string | null;
+  idempotencyReplayed: boolean;
+  idempotencyExpiresAt: string | null;
+}
+
+interface ParsedServiceResponse<T> {
+  status: number;
+  body: T;
+  requestId: string | null;
+  idempotencyReplayed: boolean;
+  idempotencyExpiresAt: string | null;
+}
+
 function safeText(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value.slice(0, 240) : fallback;
 }
@@ -69,10 +97,17 @@ function assertServiceSecret(secret: string): string {
   return secret;
 }
 
-function assertFeedReadScopes(value: unknown): asserts value is ["feed:read"] {
-  if (!Array.isArray(value) || value.length !== 1 || value[0] !== "feed:read") {
+function assertDelegatedScopes(value: unknown): asserts value is OrbitGrantScope[] {
+  if (!isCanonicalOrbitGrantScopes(value)) {
     throw new Error("Orbit returned an unexpected delegated scope set");
   }
+}
+
+function assertIdempotencyKey(value: string): string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 128 || !/^[!-~]+$/u.test(value)) {
+    throw new Error("Invalid Orbit idempotency key");
+  }
+  return value;
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -115,17 +150,22 @@ export class OrbitMcpApi {
     authorizationRequestId: string;
     oauthClientId: string;
     oauthClientLabel: string;
+    scopes: OrbitGrantScope[];
   }): Promise<OrbitAuthorizationTicketResponse> {
+    const scopes = normalizeOrbitGrantScopes(input.scopes);
     const result = await this.#post<OrbitAuthorizationTicketResponse>(
       "/v1/mcp/authorization-tickets",
       {
         authorizationRequestId: input.authorizationRequestId,
         oauthClientId: input.oauthClientId,
         oauthClientLabel: input.oauthClientLabel,
-        scopes: ["feed:read"],
+        scopes,
       },
     );
-    assertFeedReadScopes(result.authorizationRequest.scopes);
+    assertDelegatedScopes(result.authorizationRequest.scopes);
+    if (!sameOrbitGrantScopes(result.authorizationRequest.scopes, scopes)) {
+      throw new Error("Orbit authorization ticket changed the requested scope set");
+    }
     return result;
   }
 
@@ -137,7 +177,7 @@ export class OrbitMcpApi {
       "/v1/mcp/delegations/redeem",
       input,
     );
-    assertFeedReadScopes(result.authorization.scopes);
+    assertDelegatedScopes(result.authorization.scopes);
     return result;
   }
 
@@ -146,22 +186,72 @@ export class OrbitMcpApi {
       `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/state`,
       {},
     );
-    assertFeedReadScopes(result.authorization.scopes);
+    assertDelegatedScopes(result.authorization.scopes);
     return result;
   }
 
+  async createDelegatedPost(
+    grantId: string,
+    body: OrbitCreateRecordInput,
+    idempotencyKey: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#postResult(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/records`,
+      { ...body, mediaId: null },
+      assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
+  async createDelegatedReply(
+    grantId: string,
+    record: string,
+    body: OrbitCreateRecordInput,
+    idempotencyKey: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#postResult(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/replies`,
+      { ...body, mediaId: null },
+      assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
   async #post<T>(path: string, body: unknown): Promise<T> {
+    return (await this.#request<T>(path, body)).body;
+  }
+
+  async #postResult(
+    path: string,
+    body: unknown,
+    idempotencyKey: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#request<unknown>(path, body, idempotencyKey);
+  }
+
+  async #request<T>(
+    path: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ): Promise<ParsedServiceResponse<T>> {
+    const headers = new Headers({
+      authorization: `Bearer ${this.#serviceSecret}`,
+      "content-type": "application/json; charset=utf-8",
+      accept: "application/json",
+    });
+    if (idempotencyKey) headers.set("idempotency-key", idempotencyKey);
     const request = new Request(`${ORBIT_ORIGIN}${path}`, {
       method: "POST",
-      headers: {
-        authorization: `Bearer ${this.#serviceSecret}`,
-        "content-type": "application/json; charset=utf-8",
-        accept: "application/json",
-      },
+      headers,
       body: JSON.stringify(body),
       redirect: "manual",
     });
     const response = await this.#service.fetch(request);
-    return parseJsonResponse<T>(response);
+    const parsed = await parseJsonResponse<T>(response);
+    return {
+      status: response.status,
+      body: parsed,
+      requestId: response.headers.get("x-request-id"),
+      idempotencyReplayed: response.headers.get("idempotency-replayed") === "true",
+      idempotencyExpiresAt: response.headers.get("idempotency-key-expires-at"),
+    };
   }
 }

@@ -7,6 +7,7 @@ import {
   PRIMARY_ORIGIN,
   SERVICE_DISPLAY_NAME,
 } from "./service-metadata";
+import { ORBIT_GRANT_SCOPES } from "./orbit-scopes";
 import type { Env } from "./oauth-types";
 
 const oauthProvider = new OAuthProvider<Env>({
@@ -16,14 +17,14 @@ const oauthProvider = new OAuthProvider<Env>({
   authorizeEndpoint: "/authorize",
   tokenEndpoint: "/oauth/token",
   clientRegistrationEndpoint: "/oauth/register",
-  scopesSupported: ["feed:read", "offline_access"],
+  scopesSupported: [...ORBIT_GRANT_SCOPES, "offline_access"],
   allowPlainPKCE: false,
   allowImplicitFlow: false,
   clientIdMetadataDocumentEnabled: true,
   resourceMetadata: {
     resource: AGENT_MCP_URL,
     authorization_servers: [PRIMARY_ORIGIN],
-    scopes_supported: ["feed:read"],
+    scopes_supported: [...ORBIT_GRANT_SCOPES],
     bearer_methods_supported: ["header"],
     resource_name: `${SERVICE_DISPLAY_NAME} Agent`,
   },
