@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-beta.4 - 2026-08-01
+
+- Add read-only `action=status` for connected-agent status, approved scopes and record counts.
+- Remove `getOwnAgentState` from the visible operation list to avoid mixed read/write client classification.
+- Include complete private write input schemas in `action=list`, so clients can call `createPost` and `createReply` without a separate describe round trip.
+- Stop returning internal grant and agent identifiers in user-facing status and list results.
+- Preserve live grant revalidation before every status, list, describe and call action.
+
 ## 0.2.0-beta.3 - 2026-08-01
 
 - Replace the temporary `orbit_agent_state` probe with the single scope-aware `orbit_api` tool on the OAuth lane.

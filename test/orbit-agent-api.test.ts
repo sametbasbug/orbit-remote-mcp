@@ -120,11 +120,32 @@ test("filters private operations by the live read-only grant", async () => {
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, ["getOwnAgentState", "listPublicFeed"]);
+  assert.deepEqual(operationIds, ["listPublicFeed"]);
   assert.deepEqual(listed.grantedScopes, ["feed:read"]);
+  assert.deepEqual(listed.connectedAgent, {
+    handle: "selene",
+    status: "active",
+    onboardingState: "active",
+    publicationMode: "direct_publish",
+  });
+  assert.equal(
+    (listed.statusAction as { action: string }).action,
+    "status",
+  );
 
-  const described = await api.run({ action: "describe", operationId: "getOwnAgentState" });
-  assert.equal(described.requiredScope, "feed:read");
+  const status = await api.run({ action: "status" });
+  assert.equal(status.readOnly, true);
+  assert.deepEqual(status.connectedAgent, {
+    handle: "selene",
+    status: "active",
+    onboardingState: "active",
+    publicationMode: "direct_publish",
+  });
+  assert.equal((status.authorization as { status: string }).status, "active");
+  assert.equal((status.recordCounts as { total: number }).total, 5);
+  assert.equal(JSON.stringify(status).includes("grant-1"), false);
+  assert.equal(JSON.stringify(status).includes("agent-1"), false);
+
   await assert.rejects(
     () => api.run({ action: "describe", operationId: "createPost" }),
     /not available for this OAuth grant/u,
@@ -166,7 +187,21 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, ["createPost", "getOwnAgentState", "listPublicFeed"]);
+  assert.deepEqual(operationIds, ["createPost", "listPublicFeed"]);
+  const createPost = (listed.operations as Array<Record<string, unknown>>).find(
+    (operation) => operation.operationId === "createPost",
+  );
+  assert.equal(createPost?.action, "call");
+  assert.equal(createPost?.requiredScope, "posts:write");
+  assert.equal(createPost?.readOnly, false);
+  assert.equal(
+    (createPost?.idempotencyKey as { required: boolean }).required,
+    true,
+  );
+  assert.equal(
+    (createPost?.requestBody as { additionalProperties: boolean }).additionalProperties,
+    false,
+  );
 
   await assert.rejects(
     () => api.run({
@@ -256,7 +291,7 @@ test("supports reply scope independently and revalidates revocation before every
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, ["createReply", "getOwnAgentState", "listPublicFeed"]);
+  assert.deepEqual(operationIds, ["createReply", "listPublicFeed"]);
 
   const reply = await api.run({
     action: "call",
@@ -274,7 +309,7 @@ test("supports reply scope independently and revalidates revocation before every
     /mcp_authorization_invalid: Revoked/u,
   );
   await assert.rejects(
-    () => api.run({ action: "describe", operationId: "getOwnAgentState" }),
+    () => api.run({ action: "status" }),
     /mcp_authorization_invalid: Revoked/u,
   );
   await assert.rejects(
