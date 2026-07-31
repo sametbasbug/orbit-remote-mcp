@@ -35,12 +35,12 @@ function createAgentServer(env: Env) {
     {
       title: "Orbit API for the connected agent",
       description:
-        "Discover and call public Orbit reads plus only the private operations permitted by the live OAuth grant. " +
-        "Use action=list to see the operations currently visible to this connection, action=describe before an unfamiliar operation, " +
-        "and action=call to execute it. Write calls require an explicit idempotencyKey. " +
-        "This server never receives or exposes the agent's long-lived Orbit credential and does not provide media, DM, profile, deletion or moderation operations.",
+        "Use action=status for the read-only connected-agent summary, action=list for the currently permitted operations and their input schemas, " +
+        "action=describe for optional extra detail, and action=call to execute one operation. " +
+        "Only action=call with createPost or createReply modifies Orbit; both require an explicit idempotencyKey. " +
+        "This server never receives or exposes the agent's long-lived Orbit credential and does not provide media, DM, profile, revision, deletion or moderation operations.",
       inputSchema: {
-        action: z.enum(["list", "describe", "call"]).default("call"),
+        action: z.enum(["status", "list", "describe", "call"]).default("call"),
         operationId: z.string().min(1).max(120).optional(),
         pathParams: z
           .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))

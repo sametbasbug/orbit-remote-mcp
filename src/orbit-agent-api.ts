@@ -7,7 +7,7 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const IDEMPOTENCY_KEY_PATTERN = /^[!-~]+$/u;
 
 interface PrivateOperation {
-  operationId: "getOwnAgentState" | "createPost" | "createReply";
+  operationId: "createPost" | "createReply";
   method: "GET" | "POST";
   path: string;
   summary: string;
@@ -41,18 +41,6 @@ const RECORD_BODY_SCHEMA: Record<string, JsonValue> = {
 
 const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
   {
-    operationId: "getOwnAgentState",
-    method: "GET",
-    path: "/agent/state",
-    summary: "Read the connected agent's private state",
-    description:
-      "Return the live Orbit authorization, agent status, publication mode and private record counts for the OAuth-connected agent.",
-    requiredScope: "feed:read",
-    pathParameters: [],
-    bodySchema: null,
-    requiresIdempotencyKey: false,
-  },
-  {
     operationId: "createPost",
     method: "POST",
     path: "/records",
@@ -85,13 +73,20 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
   },
 ];
 
-export interface OrbitAgentApiInput extends OrbitPublicApiInput {
+export interface OrbitAgentApiInput extends Omit<OrbitPublicApiInput, "action"> {
+  action?: "status" | "list" | "describe" | "call";
   body?: unknown;
   idempotencyKey?: string;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function operationIdOf(value: unknown): string {
+  return isPlainObject(value) && typeof value.operationId === "string"
+    ? value.operationId
+    : "";
 }
 
 function visiblePrivateOperations(scopes: readonly OrbitGrantScope[]): PrivateOperation[] {
@@ -105,6 +100,8 @@ function privateOperationDescription(operation: PrivateOperation): Record<string
     path: operation.path,
     summary: operation.summary,
     description: operation.description,
+    operationType: "write",
+    readOnly: false,
     authentication: `OAuth grant with live Orbit revalidation; requires ${operation.requiredScope}`,
     requiredScope: operation.requiredScope,
     pathParameters: operation.pathParameters,
@@ -234,6 +231,31 @@ function assertLiveStateMatchesProps(
   }
 }
 
+function connectedAgentSummary(state: OrbitDelegatedAgentStateResponse): Record<string, JsonValue> {
+  return {
+    handle: state.agent.handle,
+    status: state.agent.status,
+    onboardingState: state.agent.onboardingState,
+    publicationMode: state.agent.publicationMode,
+  };
+}
+
+function statusResult(state: OrbitDelegatedAgentStateResponse): OrbitPublicApiResult {
+  return {
+    ok: true,
+    action: "status",
+    readOnly: true,
+    connectedAgent: connectedAgentSummary(state),
+    grantedScopes: state.authorization.scopes,
+    authorization: {
+      status: state.authorization.status,
+      expiresAt: state.authorization.expiresAt,
+      lastUsedAt: state.authorization.lastUsedAt,
+    },
+    recordCounts: state.recordCounts,
+  };
+}
+
 export class OrbitAgentApi {
   readonly #publicApi: OrbitPublicApi;
   readonly #mcpApi: OrbitMcpApi;
@@ -256,6 +278,18 @@ export class OrbitAgentApi {
     const action = input.action ?? "call";
     const visibleOperations = visiblePrivateOperations(state.authorization.scopes);
 
+    if (action === "status") {
+      if (input.operationId !== undefined) {
+        throw new Error("action=status does not accept operationId");
+      }
+      rejectUnexpectedPrivateInputs(input, {
+        allowBody: false,
+        allowIdempotencyKey: false,
+        allowRecordPath: false,
+      });
+      return statusResult(state);
+    }
+
     if (action === "list") {
       const publicResult = await this.#publicApi.run({
         action: "list",
@@ -263,26 +297,23 @@ export class OrbitAgentApi {
       });
       const publicOperations = Array.isArray(publicResult.operations) ? publicResult.operations : [];
       const privateOperations = visibleOperations.map((operation) => ({
-        operationId: operation.operationId,
-        method: operation.method,
-        path: operation.path,
-        summary: operation.summary,
+        ...privateOperationDescription(operation),
+        action: "call",
       }));
-      const operations = [...publicOperations, ...privateOperations].sort((left, right) => {
-        const leftId = isPlainObject(left) && typeof left.operationId === "string" ? left.operationId : "";
-        const rightId = isPlainObject(right) && typeof right.operationId === "string" ? right.operationId : "";
-        return leftId.localeCompare(rightId);
-      });
+      const operations = [...publicOperations, ...privateOperations].sort(
+        (left, right) => operationIdOf(left).localeCompare(operationIdOf(right)),
+      );
       return {
         ...publicResult,
         operationCount: operations.length,
         operations,
-        connectedAgent: {
-          id: state.agent.id,
-          handle: state.agent.handle,
-          publicationMode: state.agent.publicationMode,
-        },
+        connectedAgent: connectedAgentSummary(state),
         grantedScopes: state.authorization.scopes,
+        statusAction: {
+          action: "status",
+          readOnly: true,
+          description: "Return the connected agent status, approved scopes and private record counts without exposing internal grant or agent identifiers.",
+        },
       };
     }
 
@@ -297,31 +328,6 @@ export class OrbitAgentApi {
       }
       if (action === "describe") {
         return { ok: true, action, ...privateOperationDescription(privateOperation) };
-      }
-
-      if (privateOperation.operationId === "getOwnAgentState") {
-        rejectUnexpectedPrivateInputs(input, {
-          allowBody: false,
-          allowIdempotencyKey: false,
-          allowRecordPath: false,
-        });
-        return {
-          ok: true,
-          operationId: privateOperation.operationId,
-          method: privateOperation.method,
-          path: privateOperation.path,
-          status: 200,
-          body: {
-            authorization: {
-              grantId: state.authorization.id,
-              scopes: state.authorization.scopes,
-              expiresAt: state.authorization.expiresAt,
-              lastUsedAt: state.authorization.lastUsedAt,
-            },
-            agent: state.agent,
-            recordCounts: state.recordCounts,
-          },
-        };
       }
 
       rejectUnexpectedPrivateInputs(input, {
