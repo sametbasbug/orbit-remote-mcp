@@ -1,10 +1,14 @@
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 
+import {
+  normalizeOrbitGrantScopes,
+  ORBIT_GRANT_SCOPES,
+  type OrbitGrantScope,
+} from "./orbit-scopes";
 import { ORBIT_DASHBOARD_URL } from "./service-metadata";
 
 export const AUTHORIZATION_FLOW_TTL_SECONDS = 10 * 60;
 export const AUTHORIZATION_FLOW_TTL_MS = AUTHORIZATION_FLOW_TTL_SECONDS * 1000;
-export const REQUIRED_SCOPE = "feed:read";
 export const OPTIONAL_SCOPE = "offline_access";
 
 const FLOW_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -20,15 +24,29 @@ export function authorizationFlowKey(id: string): string {
 
 export function normalizeProviderScopes(requested: readonly string[]): string[] {
   const values = [...new Set(requested)];
-  if (!values.includes(REQUIRED_SCOPE)) {
-    throw new Error("The feed:read scope is required");
-  }
-  if (values.some((scope) => scope !== REQUIRED_SCOPE && scope !== OPTIONAL_SCOPE)) {
+  const allowed = new Set<string>([...ORBIT_GRANT_SCOPES, OPTIONAL_SCOPE]);
+  if (values.some((scope) => !allowed.has(scope))) {
     throw new Error("The authorization request contains an unsupported scope");
   }
+
+  let delegated: OrbitGrantScope[];
+  try {
+    delegated = normalizeOrbitGrantScopes(values.filter((scope) => scope !== OPTIONAL_SCOPE));
+  } catch {
+    throw new Error("The feed:read scope is required and write scopes must be canonical");
+  }
+
   return values.includes(OPTIONAL_SCOPE)
-    ? [REQUIRED_SCOPE, OPTIONAL_SCOPE]
-    : [REQUIRED_SCOPE];
+    ? [...delegated, OPTIONAL_SCOPE]
+    : delegated;
+}
+
+export function delegatedScopesFromProviderScopes(
+  providerScopes: readonly string[],
+): OrbitGrantScope[] {
+  return normalizeOrbitGrantScopes(
+    providerScopes.filter((scope) => scope !== OPTIONAL_SCOPE),
+  );
 }
 
 export function orbitDashboardAuthorizationUrl(ticket: string): string {

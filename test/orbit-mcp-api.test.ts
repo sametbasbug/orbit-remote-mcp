@@ -30,7 +30,7 @@ test("creates a signed authorization ticket through the service binding", async 
         authorizationRequest: {
           id: "request-1",
           oauthClient: { id: "client-1", label: "ChatGPT" },
-          scopes: ["feed:read"],
+          scopes: ["feed:read", "posts:write", "replies:write"],
           issuedAt: 1,
           expiresAt: 2,
         },
@@ -42,6 +42,7 @@ test("creates a signed authorization ticket through the service binding", async 
     authorizationRequestId: "request-1",
     oauthClientId: "client-1",
     oauthClientLabel: "ChatGPT",
+    scopes: ["feed:read", "posts:write", "replies:write"],
   });
 
   assert.equal(result.ticket, "orb_mcp_auth_v1.payload.signature");
@@ -54,7 +55,7 @@ test("creates a signed authorization ticket through the service binding", async 
     authorizationRequestId: "request-1",
     oauthClientId: "client-1",
     oauthClientLabel: "ChatGPT",
-    scopes: ["feed:read"],
+    scopes: ["feed:read", "posts:write", "replies:write"],
   });
 });
 
@@ -69,7 +70,7 @@ test("redeems a one-time delegation without exposing an agent credential", async
           id: "grant-1",
           accountId: "account-1",
           agent: { id: "agent-1", handle: "selene" },
-          scopes: ["feed:read"],
+          scopes: ["feed:read", "posts:write"],
           oauthClient: { id: "client-1", label: "ChatGPT" },
           status: "active",
           createdAt: 1,
@@ -93,8 +94,8 @@ test("redeems a one-time delegation without exposing an agent credential", async
   assert.equal(calls[0]!.url, `${ORBIT_ORIGIN}/v1/mcp/delegations/redeem`);
 });
 
-test("reads delegated agent state and rejects scope drift", async () => {
-  let elevated = false;
+test("reads delegated agent state with write scopes and rejects unknown scope drift", async () => {
+  let scopes: unknown = ["feed:read", "posts:write", "replies:write"];
   const api = new OrbitMcpApi({
     ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
     ORBIT_SERVICE: service(() => jsonResponse({
@@ -102,7 +103,7 @@ test("reads delegated agent state and rejects scope drift", async () => {
         id: "grant-1",
         accountId: "account-1",
         agent: { id: "agent-1", handle: "selene" },
-        scopes: elevated ? ["feed:read", "records:write"] : ["feed:read"],
+        scopes,
         oauthClient: { id: "client-1", label: "ChatGPT" },
         status: "active",
         createdAt: 1,
@@ -133,9 +134,62 @@ test("reads delegated agent state and rejects scope drift", async () => {
   const state = await api.getDelegatedAgentState("grant-1");
   assert.equal(state.agent.handle, "selene");
   assert.equal(state.recordCounts.total, 5);
+  assert.deepEqual(state.authorization.scopes, ["feed:read", "posts:write", "replies:write"]);
 
-  elevated = true;
+  scopes = ["feed:read", "records:write"];
   await assert.rejects(() => api.getDelegatedAgentState("grant-1"), /unexpected delegated scope/u);
+});
+
+test("creates delegated posts and replies with explicit idempotency and no media", async () => {
+  const calls: Request[] = [];
+  const api = new OrbitMcpApi({
+    ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
+    ORBIT_SERVICE: service(async (request) => {
+      calls.push(request);
+      return new Response(JSON.stringify({ record: { id: `record-${calls.length}` } }), {
+        status: calls.length === 1 ? 201 : 202,
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": `request-${calls.length}`,
+          "idempotency-key-expires-at": "2026-08-01T01:00:00.000Z",
+          ...(calls.length === 2 ? { "idempotency-replayed": "true" } : {}),
+        },
+      });
+    }),
+  });
+
+  const body = {
+    bodyMarkdown: "MCP write test",
+    projectSlug: null,
+    topicSlugs: ["orbit"],
+  };
+  const post = await api.createDelegatedPost("grant-1", body, "post-key-1");
+  const reply = await api.createDelegatedReply("grant-1", "root/unsafe", body, "reply-key-1");
+
+  assert.equal(post.status, 201);
+  assert.equal(post.requestId, "request-1");
+  assert.equal(post.idempotencyReplayed, false);
+  assert.equal(reply.status, 202);
+  assert.equal(reply.idempotencyReplayed, true);
+  assert.equal(reply.idempotencyExpiresAt, "2026-08-01T01:00:00.000Z");
+
+  assert.equal(
+    calls[0]!.url,
+    `${ORBIT_ORIGIN}/v1/mcp/grants/grant-1/records`,
+  );
+  assert.equal(
+    calls[1]!.url,
+    `${ORBIT_ORIGIN}/v1/mcp/grants/grant-1/records/root%2Funsafe/replies`,
+  );
+  assert.equal(calls[0]!.headers.get("idempotency-key"), "post-key-1");
+  assert.equal(calls[1]!.headers.get("idempotency-key"), "reply-key-1");
+  assert.deepEqual(await calls[0]!.clone().json(), { ...body, mediaId: null });
+  assert.deepEqual(await calls[1]!.clone().json(), { ...body, mediaId: null });
+
+  await assert.rejects(
+    () => api.createDelegatedPost("grant-1", body, "bad key with spaces"),
+    /Invalid Orbit idempotency key/u,
+  );
 });
 
 test("rejects redirects, oversized errors and missing service configuration", async () => {

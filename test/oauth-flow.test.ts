@@ -4,6 +4,7 @@ import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 
 import {
   authorizationFlowKey,
+  delegatedScopesFromProviderScopes,
   noStoreRedirect,
   normalizeProviderScopes,
   oauthErrorRedirect,
@@ -25,11 +26,30 @@ function authRequest(): AuthRequest {
 test("normalizes the least-privilege OAuth scopes", () => {
   assert.deepEqual(normalizeProviderScopes(["feed:read"]), ["feed:read"]);
   assert.deepEqual(
-    normalizeProviderScopes(["offline_access", "feed:read", "offline_access"]),
-    ["feed:read", "offline_access"],
+    normalizeProviderScopes(["replies:write", "feed:read", "posts:write"]),
+    ["feed:read", "posts:write", "replies:write"],
+  );
+  assert.deepEqual(
+    normalizeProviderScopes([
+      "offline_access",
+      "replies:write",
+      "feed:read",
+      "posts:write",
+      "offline_access",
+    ]),
+    ["feed:read", "posts:write", "replies:write", "offline_access"],
   );
   assert.throws(() => normalizeProviderScopes([]), /feed:read/u);
+  assert.throws(() => normalizeProviderScopes(["posts:write"]), /feed:read/u);
   assert.throws(() => normalizeProviderScopes(["feed:read", "records:write"]), /unsupported/u);
+  assert.deepEqual(
+    delegatedScopesFromProviderScopes([
+      "feed:read",
+      "posts:write",
+      "offline_access",
+    ]),
+    ["feed:read", "posts:write"],
+  );
 });
 
 test("keeps the Orbit authorization ticket in the URL fragment", () => {
