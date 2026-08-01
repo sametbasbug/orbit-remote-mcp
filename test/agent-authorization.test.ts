@@ -16,22 +16,33 @@ test("accepts the token-bound current Orbit permission bundle", () => {
   assert.deepEqual(readOrbitOAuthProps(validProps), validProps);
 });
 
-test("rejects partial, invalid or outdated OAuth permission bundles", () => {
-  assert.throws(
-    () => readOrbitOAuthProps({ ...validProps, scopes: ["feed:read"] }),
-    /reauthorization/u,
+test("accepts historical OAuth permission snapshots without reauthorization", () => {
+  assert.deepEqual(
+    readOrbitOAuthProps({ ...validProps, scopes: ["feed:read"], scopeBundleVersion: 1 }),
+    { ...validProps, scopes: ["feed:read"], scopeBundleVersion: 1 },
+   );
+  assert.deepEqual(
+    readOrbitOAuthProps({ ...validProps, scopeBundleVersion: 0 }),
+    { ...validProps, scopeBundleVersion: 0 },
   );
+});
+
+test("rejects invalid OAuth permission snapshot metadata", () => {
   assert.throws(
     () => readOrbitOAuthProps({ ...validProps, scopes: ["offline_access"] }),
-    /reauthorization/u,
+    /unexpected delegated scope set/u,
   );
   assert.throws(
     () => readOrbitOAuthProps({ ...validProps, scopes: ["feed:read", "records:write"] }),
-    /reauthorization/u,
+    /unexpected delegated scope set/u,
   );
   assert.throws(
-    () => readOrbitOAuthProps({ ...validProps, scopeBundleVersion: 0 }),
-    /bundle version/u,
+    () => readOrbitOAuthProps({ ...validProps, scopeBundleVersion: -1 }),
+    /scopeBundleVersion/u,
+  );
+  assert.throws(
+    () => readOrbitOAuthProps({ ...validProps, scopeBundleVersion: "2" }),
+    /scopeBundleVersion/u,
   );
 });
 

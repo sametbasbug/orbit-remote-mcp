@@ -46,3 +46,14 @@
   `1`, and the idempotency test message appeared exactly once in the sent box. Live v0.4.1
   acceptance is complete; revocation had already been independently verified to reject access
   immediately.
+
+## v0.4.2 evergreen authorization
+
+- [x] Remove permission-scope cards and scope details from the Orbit dashboard connection screen.
+- [x] Keep agent selection, allow/reject controls, revocation, and API-key reassurance.
+- [x] Treat active grants as evergreen/full-access connections instead of requiring bundle upgrades.
+- [x] Accept valid historical scope/version snapshots in existing OAuth token properties.
+- [x] Expose the current capability surface independently of historical grant scopes.
+- [x] Preserve immediate revocation, expiry, account-authority, agent-state, and live-identity enforcement.
+- [ ] Deploy Orbit core evergreen authorization support before Remote MCP v0.4.2.
+- [ ] Verify an existing ChatGPT connection works after v0.4.2 deployment without reconnecting.

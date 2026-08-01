@@ -13,7 +13,7 @@ import {
   orbitDashboardAuthorizationUrl,
 } from "./oauth-flow";
 import { OrbitMcpApi } from "./orbit-mcp-api";
-import { ORBIT_SCOPE_BUNDLE_VERSION, sameOrbitGrantScopes } from "./orbit-scopes";
+
 import type { Env, OrbitOAuthProps, StoredAuthorizationFlow } from "./oauth-types";
 
 function safeClientName(value: unknown, clientId: string): string {
@@ -138,13 +138,9 @@ async function finishAuthorization(request: Request, env: Env): Promise<Response
       authorizationRequestId,
     });
     const authorization = redeemed.authorization;
-    const requestedDelegatedScopes = delegatedScopesFromProviderScopes(flow.providerScopes);
     if (
       authorization.status !== "active"
       || authorization.oauthClient.id !== flow.request.clientId
-      || authorization.scopeBundleVersion !== ORBIT_SCOPE_BUNDLE_VERSION
-      || authorization.upgradeRequired
-      || !sameOrbitGrantScopes(authorization.scopes, requestedDelegatedScopes)
     ) {
       throw new Error("Orbit delegation did not match the OAuth authorization request");
     }

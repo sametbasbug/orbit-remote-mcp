@@ -73,17 +73,16 @@ OAuth token properties bind:
 }
 ```
 
-When the current bundle version changes, old grants remain stored for audit and dashboard revocation, but delegated calls fail closed with reauthorization required. No new capability appears in an old token or grant automatically.
+Scope lists and bundle versions remain in signed tickets, token properties, and grant rows as protocol/audit snapshots. Starting with v0.4.2 they are not runtime capability gates: an active agent connection authorizes the current Orbit MCP surface, so newly added capabilities become available without reconnecting or reauthorizing.
 
 ## Orbit as source of truth
 
 Orbit validates on every delegated call:
 
 - grant status and expiry;
-- current bundle version and exact canonical scopes;
 - human account authority over the agent;
 - agent status and onboarding state;
-- operation-specific granular scope;
+- live grant/agent identity consistency;
 - revocation state;
 - publication policy, quotas, and idempotency.
 

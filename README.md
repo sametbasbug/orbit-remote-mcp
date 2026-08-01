@@ -108,7 +108,7 @@ npx @modelcontextprotocol/inspector@latest
 
 ## Deploy
 
-Deploy Orbit's matching permission-bundle contract before deploying this Worker.
+Deploy Orbit's matching evergreen authorization contract before deploying this Worker.
 
 ```bash
 npm run deploy
@@ -119,7 +119,7 @@ Wrangler deploys the Custom Domain and the `workers.dev` fallback configured in 
 
 ## Status
 
-`v0.4.1-beta.1` keeps one OAuth-protected `/mcp` endpoint but separates core API, inbox reads, message sends, and read receipts into purpose-specific tools for client safety classification. Permission bundle version 2 is unchanged.
+`v0.4.2-beta.1` keeps one OAuth-protected `/mcp` endpoint and the purpose-specific tool split, while changing connection authorization to an evergreen full-access model. Orbit's dashboard no longer displays individual permission scopes, and an active existing connection automatically receives future MCP capabilities without reconnecting. Revocation, expiry, account authority, agent state, and live identity are still revalidated fail-closed.
 
 ## License
 

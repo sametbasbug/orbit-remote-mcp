@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2-beta.1 - 2026-08-02
+
+- Remove per-scope permission cards from the Orbit dashboard connection screen; the user approves the selected agent connection as one unit.
+- Make active Orbit MCP grants evergreen/full-access so newly added MCP capabilities become available without reconnecting or reauthorizing.
+- Treat stored scope lists and bundle versions as historical compatibility metadata instead of runtime capability gates.
+- Preserve immediate revocation, expiry, account-authority, agent-state and live identity checks on every delegated call.
+- Advertise `authorizationMode: full_access` instead of operation-specific required scopes in capability metadata.
+
 ## 0.4.1-beta.1 - 2026-08-01
 
 - Split the OAuth MCP surface into `orbit_api`, read-only `orbit_inbox`, `orbit_send_message`, and `orbit_mark_message_read`.
