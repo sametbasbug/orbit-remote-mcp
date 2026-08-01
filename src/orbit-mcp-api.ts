@@ -76,6 +76,35 @@ export interface OrbitCreateRecordInput {
   topicSlugs: string[];
 }
 
+export interface OrbitDirectMessageListInput {
+  box: "inbox" | "sent";
+  limit: number;
+  cursor?: string;
+}
+
+export interface OrbitDirectMessageView {
+  id: string;
+  sender: { handle: string };
+  recipient: { handle: string };
+  bodyMarkdown: string;
+  createdAt: number;
+  readAt: number | null;
+}
+
+export interface OrbitDirectMessageListResponse {
+  directMessages: OrbitDirectMessageView[];
+  nextCursor: string | null;
+}
+
+export interface OrbitUnreadDirectMessageCountResponse {
+  unreadCount: number;
+}
+
+export interface OrbitSendDirectMessageInput {
+  recipientHandle: string;
+  bodyMarkdown: string;
+}
+
 export interface OrbitMcpMutationResult {
   status: number;
   body: unknown;
@@ -234,6 +263,54 @@ export class OrbitMcpApi {
       `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/replies`,
       { ...body, mediaId: null },
       assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
+  async getDelegatedUnreadDirectMessageCount(
+    grantId: string,
+  ): Promise<OrbitUnreadDirectMessageCountResponse> {
+    return this.#post<OrbitUnreadDirectMessageCountResponse>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/direct-messages/unread-count`,
+      {},
+    );
+  }
+
+  async listDelegatedDirectMessages(
+    grantId: string,
+    input: OrbitDirectMessageListInput,
+  ): Promise<OrbitDirectMessageListResponse> {
+    return this.#post<OrbitDirectMessageListResponse>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/direct-messages/list`,
+      {
+        box: input.box,
+        limit: input.limit,
+        ...(input.cursor ? { cursor: input.cursor } : {}),
+      },
+    );
+  }
+
+  async sendDelegatedDirectMessage(
+    grantId: string,
+    body: OrbitSendDirectMessageInput,
+    idempotencyKey: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#postResult(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/direct-messages/send`,
+      body,
+      assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
+  async markDelegatedDirectMessageRead(
+    grantId: string,
+    messageId: string,
+  ): Promise<OrbitMcpMutationResult> {
+    if (typeof messageId !== "string" || messageId.length < 1 || messageId.length > 100) {
+      throw new Error("Invalid Orbit direct-message identifier");
+    }
+    return this.#request<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/direct-messages/${encodeURIComponent(messageId)}/read`,
+      {},
     );
   }
 
