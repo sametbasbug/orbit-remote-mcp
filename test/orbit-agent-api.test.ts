@@ -292,19 +292,28 @@ test("supports the full bundle and revalidates revocation before every action", 
     "sendDirectMessage",
   ]);
 
-  const status = await api.run({ action: "status" });
+  const coreListed = await api.runCore({ action: "list" });
+  assert.deepEqual(
+    (coreListed.operations as Array<{ operationId: string }>).map((operation) => operation.operationId),
+    ["createPost", "createReply", "listPublicFeed"],
+  );
+  assert.equal(coreListed.inboxAction, undefined);
+  await assert.rejects(
+    () => api.runCore({ action: "call", operationId: "sendDirectMessage" }),
+    /dedicated Orbit messaging tool/u,
+  );
+  await assert.rejects(
+    () => api.runCore({ action: "inbox" }),
+    /does not expose inbox operations/u,
+  );
+
+  const status = await api.runCore({ action: "status" });
   const capabilities = status.capabilities as Array<Record<string, unknown>>;
   assert.deepEqual(
     capabilities.map((operation) => operation.operationId),
-    [
-      "createPost",
-      "createReply",
-      "getUnreadDirectMessageCount",
-      "listDirectMessages",
-      "sendDirectMessage",
-      "markDirectMessageRead",
-    ],
+    ["createPost", "createReply"],
   );
+  assert.deepEqual(status.grantedScopes, scopes);
   const replyCapability = capabilities.find((operation) => operation.operationId === "createReply");
   assert.equal(replyCapability?.requiredScope, "replies:write");
   assert.equal(
@@ -320,7 +329,7 @@ test("supports the full bundle and revalidates revocation before every action", 
     idempotencyKey: "reply-key-1",
   });
   assert.equal(reply.status, 201);
-  assert.equal(stateCalls, 3);
+  assert.equal(stateCalls, 4);
 
   revoked = true;
   await assert.rejects(
@@ -335,7 +344,7 @@ test("supports the full bundle and revalidates revocation before every action", 
     () => api.run({ action: "call", operationId: "listPublicFeed" }),
     /mcp_authorization_invalid: Revoked/u,
   );
-  assert.equal(stateCalls, 6);
+  assert.equal(stateCalls, 7);
 });
 
 test("reads the inbox and performs bounded direct-message mutations", async () => {
@@ -403,9 +412,10 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
     props(scopes),
   );
 
-  const inbox = await api.run({
-    action: "inbox",
-    query: { box: "inbox", limit: 10, cursor: "opaque-cursor" },
+  const inbox = await api.readInbox({
+    box: "inbox",
+    limit: 10,
+    cursor: "opaque-cursor",
   });
   assert.equal(inbox.action, "inbox");
   assert.equal(inbox.readOnly, true);
@@ -447,10 +457,9 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
     /Unsupported body field: mediaId/u,
   );
 
-  const sent = await api.run({
-    action: "call",
-    operationId: "sendDirectMessage",
-    body: { recipientHandle: "nyx", bodyMarkdown: "Mesaj alındı." },
+  const sent = await api.sendMessage({
+    recipientHandle: "nyx",
+    bodyMarkdown: "Mesaj alındı.",
     idempotencyKey: "dm-key-1",
   });
   assert.equal(sent.status, 201);
@@ -473,11 +482,7 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
     }),
     /does not accept idempotencyKey/u,
   );
-  const read = await api.run({
-    action: "call",
-    operationId: "markDirectMessageRead",
-    pathParams: { id: "dm-1" },
-  });
+  const read = await api.markMessageRead({ messageId: "dm-1" });
   assert.equal(read.status, 200);
   assert.deepEqual(read.body, { directMessage: { id: "dm-1", readAt: 12 } });
   const readRequest = calls.find((request) => new URL(request.url).pathname.endsWith("/direct-messages/dm-1/read"));
