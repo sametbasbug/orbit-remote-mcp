@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1-beta.1 - 2026-08-01
+
+- Split the OAuth MCP surface into `orbit_api`, read-only `orbit_inbox`, `orbit_send_message`, and `orbit_mark_message_read`.
+- Remove inbox actions and messaging operation IDs from the visible `orbit_api` surface.
+- Preserve one `/mcp` endpoint, permission bundle version 2, live grant revalidation, idempotency, and recipient-bound receipts.
+- Give each tool accurate read-only, idempotency, destructive, and open-world annotations for client safety classification.
+
 ## 0.4.0-beta.1 - 2026-08-01
 
 - Add permission bundle version 2 with mandatory `messages:read` and `messages:write` scopes.

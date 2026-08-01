@@ -14,6 +14,13 @@ type PrivateOperationId =
   | "sendDirectMessage"
   | "markDirectMessageRead";
 
+const MESSAGE_OPERATION_IDS = new Set<PrivateOperationId>([
+  "getUnreadDirectMessageCount",
+  "listDirectMessages",
+  "sendDirectMessage",
+  "markDirectMessageRead",
+]);
+
 interface PrivateOperation {
   operationId: PrivateOperationId;
   method: "GET" | "POST";
@@ -199,6 +206,24 @@ function operationIdOf(value: unknown): string {
   return isPlainObject(value) && typeof value.operationId === "string"
     ? value.operationId
     : "";
+}
+
+function isMessageOperationId(value: unknown): value is PrivateOperationId {
+  return typeof value === "string" && MESSAGE_OPERATION_IDS.has(value as PrivateOperationId);
+}
+
+function coreSurfaceResult(result: OrbitPublicApiResult): OrbitPublicApiResult {
+  const filtered: OrbitPublicApiResult = { ...result };
+  if (Array.isArray(result.capabilities)) {
+    filtered.capabilities = result.capabilities.filter((operation) => !isMessageOperationId(operationIdOf(operation)));
+  }
+  if (Array.isArray(result.operations)) {
+    const operations = result.operations.filter((operation) => !isMessageOperationId(operationIdOf(operation)));
+    filtered.operations = operations;
+    filtered.operationCount = operations.length;
+  }
+  delete filtered.inboxAction;
+  return filtered;
 }
 
 function visiblePrivateOperations(scopes: readonly OrbitGrantScope[]): PrivateOperation[] {
@@ -484,6 +509,50 @@ export class OrbitAgentApi {
     this.#publicApi = publicApi;
     this.#mcpApi = mcpApi;
     this.#props = props;
+  }
+
+  async runCore(input: OrbitAgentApiInput): Promise<OrbitPublicApiResult> {
+    if (input.action === "inbox") throw new Error("The core Orbit API does not expose inbox operations");
+    if (isMessageOperationId(input.operationId)) {
+      throw new Error("Use the dedicated Orbit messaging tool for this operation");
+    }
+    return coreSurfaceResult(await this.run(input));
+  }
+
+  async readInbox(input: {
+    box: "inbox" | "sent";
+    limit: number;
+    cursor?: string;
+  }): Promise<OrbitPublicApiResult> {
+    return this.run({
+      action: "inbox",
+      query: {
+        box: input.box,
+        limit: input.limit,
+        ...(input.cursor ? { cursor: input.cursor } : {}),
+      },
+    });
+  }
+
+  async sendMessage(input: {
+    recipientHandle: string;
+    bodyMarkdown: string;
+    idempotencyKey: string;
+  }): Promise<OrbitPublicApiResult> {
+    return this.run({
+      action: "call",
+      operationId: "sendDirectMessage",
+      body: { recipientHandle: input.recipientHandle, bodyMarkdown: input.bodyMarkdown },
+      idempotencyKey: input.idempotencyKey,
+    });
+  }
+
+  async markMessageRead(input: { messageId: string }): Promise<OrbitPublicApiResult> {
+    return this.run({
+      action: "call",
+      operationId: "markDirectMessageRead",
+      pathParams: { id: input.messageId },
+    });
   }
 
   async run(input: OrbitAgentApiInput): Promise<OrbitPublicApiResult> {

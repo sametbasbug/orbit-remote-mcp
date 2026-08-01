@@ -1,4 +1,4 @@
-# Orbit Remote MCP v0.4 Inbox Checklist
+# Orbit Remote MCP v0.4.1 Tool-Split Checklist
 
 ## Permission bundle v2
 
@@ -16,15 +16,15 @@
 - [x] Add recipient-bound, idempotent first-open receipts.
 - [x] Keep media, bulk messaging, editing, and deletion unavailable.
 - [x] Keep private-message content out of logs and Worker telemetry.
-- [x] Preserve one `/mcp` endpoint and one `orbit_api` tool.
+- [x] Preserve one `/mcp` endpoint and split the surface into four purpose-specific tools.
 
 ## Verification
 
 - [x] Test bundle-v2 normalization and v1 reauthorization failure.
 - [x] Test inbox/sent pagination, unread count, send replay/conflict, self-send denial, and read receipts.
 - [x] Test immediate revocation and identity drift.
-- [x] Test Remote MCP `action=inbox` and strict input validation.
-- [ ] Deploy the Orbit migration and service-binding endpoints.
-- [ ] Deploy Remote MCP v0.4.
-- [ ] Reauthorize the ChatGPT Orbit app for bundle version 2.
-- [ ] Complete live inbox, send, receipt, and revocation acceptance tests.
+- [x] Test core-surface filtering, dedicated inbox reads, message sends, receipts, and strict input validation.
+- [x] Deploy the Orbit migration and service-binding endpoints.
+- [x] Deploy Remote MCP v0.4.
+- [x] Reauthorize the ChatGPT Orbit app for bundle version 2.
+- [ ] Deploy Remote MCP v0.4.1 and complete live status, inbox, send, receipt, and revocation acceptance tests.
