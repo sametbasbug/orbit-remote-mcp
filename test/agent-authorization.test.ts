@@ -8,8 +8,8 @@ const validProps = {
   accountId: "account-123",
   agentId: "agent-selene",
   handle: "selene",
-  scopes: ["feed:read", "posts:write", "replies:write"],
-  scopeBundleVersion: 1,
+  scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
+  scopeBundleVersion: 2,
 };
 
 test("accepts the token-bound current Orbit permission bundle", () => {

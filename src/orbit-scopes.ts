@@ -2,9 +2,11 @@ export const ORBIT_GRANT_SCOPES = [
   "feed:read",
   "posts:write",
   "replies:write",
+  "messages:read",
+  "messages:write",
 ] as const;
 
-export const ORBIT_SCOPE_BUNDLE_VERSION = 1;
+export const ORBIT_SCOPE_BUNDLE_VERSION = 2;
 export const CURRENT_ORBIT_SCOPE_BUNDLE = [...ORBIT_GRANT_SCOPES] as const;
 
 export type OrbitGrantScope = (typeof ORBIT_GRANT_SCOPES)[number];

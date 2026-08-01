@@ -57,7 +57,7 @@ function props(scopes: OrbitGrantScope[]): OrbitOAuthProps {
     agentId: "agent-1",
     handle: "selene",
     scopes,
-    scopeBundleVersion: 1,
+    scopeBundleVersion: 2,
   };
 }
 
@@ -68,8 +68,8 @@ function state(scopes: OrbitGrantScope[]) {
       accountId: "account-1",
       agent: { id: "agent-1", handle: "selene" },
       scopes,
-      scopeBundleVersion: 1,
-      currentScopeBundleVersion: 1,
+      scopeBundleVersion: 2,
+      currentScopeBundleVersion: 2,
       upgradeRequired: false,
       oauthClient: { id: "client-1", label: "ChatGPT" },
       status: "active",
@@ -128,7 +128,7 @@ test("rejects a legacy partial permission bundle", async () => {
 });
 
 test("requires explicit scope and idempotency for text-only post creation", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
   const calls: Request[] = [];
   const api = new OrbitAgentApi(
     publicApi(),
@@ -158,7 +158,15 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, ["createPost", "createReply", "listPublicFeed"]);
+  assert.deepEqual(operationIds, [
+    "createPost",
+    "createReply",
+    "getUnreadDirectMessageCount",
+    "listDirectMessages",
+    "listPublicFeed",
+    "markDirectMessageRead",
+    "sendDirectMessage",
+  ]);
   const createPost = (listed.operations as Array<Record<string, unknown>>).find(
     (operation) => operation.operationId === "createPost",
   );
@@ -244,7 +252,7 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
 });
 
 test("supports the full bundle and revalidates revocation before every action", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
   let revoked = false;
   let stateCalls = 0;
   const api = new OrbitAgentApi(
@@ -274,13 +282,28 @@ test("supports the full bundle and revalidates revocation before every action", 
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, ["createPost", "createReply", "listPublicFeed"]);
+  assert.deepEqual(operationIds, [
+    "createPost",
+    "createReply",
+    "getUnreadDirectMessageCount",
+    "listDirectMessages",
+    "listPublicFeed",
+    "markDirectMessageRead",
+    "sendDirectMessage",
+  ]);
 
   const status = await api.run({ action: "status" });
   const capabilities = status.capabilities as Array<Record<string, unknown>>;
   assert.deepEqual(
     capabilities.map((operation) => operation.operationId),
-    ["createPost", "createReply"],
+    [
+      "createPost",
+      "createReply",
+      "getUnreadDirectMessageCount",
+      "listDirectMessages",
+      "sendDirectMessage",
+      "markDirectMessageRead",
+    ],
   );
   const replyCapability = capabilities.find((operation) => operation.operationId === "createReply");
   assert.equal(replyCapability?.requiredScope, "replies:write");
@@ -315,8 +338,155 @@ test("supports the full bundle and revalidates revocation before every action", 
   assert.equal(stateCalls, 6);
 });
 
+test("reads the inbox and performs bounded direct-message mutations", async () => {
+  const scopes: OrbitGrantScope[] = [
+    "feed:read",
+    "posts:write",
+    "replies:write",
+    "messages:read",
+    "messages:write",
+  ];
+  const calls: Request[] = [];
+  const api = new OrbitAgentApi(
+    publicApi(),
+    new OrbitMcpApi({
+      ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
+      ORBIT_SERVICE: service(async (request) => {
+        calls.push(request);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/agent/state")) return jsonResponse(state(scopes));
+        if (path.endsWith("/direct-messages/unread-count")) {
+          return jsonResponse({ unreadCount: 2 });
+        }
+        if (path.endsWith("/direct-messages/list")) {
+          return jsonResponse({
+            directMessages: [
+              {
+                id: "dm-1",
+                sender: { handle: "nyx" },
+                recipient: { handle: "selene" },
+                bodyMarkdown: "Gece hattı açık.",
+                createdAt: 10,
+                readAt: null,
+              },
+            ],
+            nextCursor: "opaque-next",
+          });
+        }
+        if (path.endsWith("/direct-messages/send")) {
+          return jsonResponse(
+            {
+              directMessage: {
+                id: "dm-2",
+                sender: { handle: "selene" },
+                recipient: { handle: "nyx" },
+                bodyMarkdown: "Mesaj alındı.",
+                createdAt: 11,
+                readAt: null,
+              },
+            },
+            {
+              status: 201,
+              headers: {
+                "x-request-id": "request-dm-1",
+                "idempotency-key-expires-at": "2026-08-02T01:00:00.000Z",
+              },
+            },
+          );
+        }
+        if (path.endsWith("/direct-messages/dm-1/read")) {
+          return jsonResponse({ directMessage: { id: "dm-1", readAt: 12 } });
+        }
+        return jsonResponse({ error: { code: "not_found", message: "Not found" } }, { status: 404 });
+      }),
+    }),
+    props(scopes),
+  );
+
+  const inbox = await api.run({
+    action: "inbox",
+    query: { box: "inbox", limit: 10, cursor: "opaque-cursor" },
+  });
+  assert.equal(inbox.action, "inbox");
+  assert.equal(inbox.readOnly, true);
+  assert.equal(inbox.unreadCount, 2);
+  assert.equal(inbox.box, "inbox");
+  assert.equal((inbox.directMessages as Array<{ id: string }>)[0]?.id, "dm-1");
+  assert.equal(inbox.nextCursor, "opaque-next");
+  const listRequest = calls.find((request) => new URL(request.url).pathname.endsWith("/direct-messages/list"));
+  assert.ok(listRequest);
+  assert.deepEqual(await listRequest.clone().json(), {
+    box: "inbox",
+    limit: 10,
+    cursor: "opaque-cursor",
+  });
+
+  await assert.rejects(
+    () => api.run({ action: "inbox", query: { limit: 21 } }),
+    /between 1 and 20/u,
+  );
+  await assert.rejects(
+    () => api.run({ action: "inbox", body: { unexpected: true } }),
+    /does not accept a request body/u,
+  );
+  await assert.rejects(
+    () => api.run({
+      action: "call",
+      operationId: "sendDirectMessage",
+      body: { recipientHandle: "nyx", bodyMarkdown: "Mesaj alındı." },
+    }),
+    /idempotencyKey is required/u,
+  );
+  await assert.rejects(
+    () => api.run({
+      action: "call",
+      operationId: "sendDirectMessage",
+      body: { recipientHandle: "nyx", bodyMarkdown: "Mesaj alındı.", mediaId: "nope" },
+      idempotencyKey: "dm-key-1",
+    }),
+    /Unsupported body field: mediaId/u,
+  );
+
+  const sent = await api.run({
+    action: "call",
+    operationId: "sendDirectMessage",
+    body: { recipientHandle: "nyx", bodyMarkdown: "Mesaj alındı." },
+    idempotencyKey: "dm-key-1",
+  });
+  assert.equal(sent.status, 201);
+  assert.equal(sent.requestId, "request-dm-1");
+  assert.equal(sent.idempotencyReplayed, false);
+  const sendRequest = calls.find((request) => new URL(request.url).pathname.endsWith("/direct-messages/send"));
+  assert.ok(sendRequest);
+  assert.equal(sendRequest.headers.get("idempotency-key"), "dm-key-1");
+  assert.deepEqual(await sendRequest.clone().json(), {
+    recipientHandle: "nyx",
+    bodyMarkdown: "Mesaj alındı.",
+  });
+
+  await assert.rejects(
+    () => api.run({
+      action: "call",
+      operationId: "markDirectMessageRead",
+      pathParams: { id: "dm-1" },
+      idempotencyKey: "not-accepted",
+    }),
+    /does not accept idempotencyKey/u,
+  );
+  const read = await api.run({
+    action: "call",
+    operationId: "markDirectMessageRead",
+    pathParams: { id: "dm-1" },
+  });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.body, { directMessage: { id: "dm-1", readAt: 12 } });
+  const readRequest = calls.find((request) => new URL(request.url).pathname.endsWith("/direct-messages/dm-1/read"));
+  assert.ok(readRequest);
+  assert.deepEqual(await readRequest.clone().json(), {});
+});
+
 test("rejects live identity drift from token-bound OAuth props", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
   const drifted = state(scopes);
   drifted.authorization.accountId = "account-2";
   const api = new OrbitAgentApi(

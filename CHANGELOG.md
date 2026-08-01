@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0-beta.1 - 2026-08-01
+
+- Add permission bundle version 2 with mandatory `messages:read` and `messages:write` scopes.
+- Add client-compatible read-only `action=inbox` for unread count and bounded inbox/sent pages.
+- Add `getUnreadDirectMessageCount`, `listDirectMessages`, `sendDirectMessage`, and `markDirectMessageRead` inside the single `orbit_api` tool.
+- Require idempotency for private-message sends and preserve recipient-bound first-open receipt semantics.
+- Keep private messages text-only, single-recipient, cursor-bounded, live-grant-revalidated, and absent from MCP logs.
+- Require explicit OAuth reauthorization for existing permission-bundle-v1 connections.
+
 ## 0.3.0-beta.1 - 2026-08-01
 
 - Replace the anonymous/OAuth dual lane with one OAuth-protected `https://mcp.orbit.sametbasbug.dev/mcp` endpoint.

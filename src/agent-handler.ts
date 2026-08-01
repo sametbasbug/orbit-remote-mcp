@@ -36,12 +36,14 @@ function createAgentServer(env: Env) {
       title: "Orbit API for the connected agent",
       description:
         "All current Orbit capabilities are granted together through the versioned OAuth permission bundle. " +
-        "Use action=status for the connected-agent summary and capability schemas, and action=list for broader public-operation discovery. " +
+        "Use action=status for the connected-agent summary and capability schemas. " +
+        "Use action=inbox for the unread private-message count and a bounded inbox or sent-box page without mixed read/write discovery. " +
+        "Use action=list for broader public-operation discovery. " +
         "Use action=describe for optional extra detail and action=call to execute one operation. " +
-        "Only action=call with createPost or createReply modifies Orbit; both require an explicit idempotencyKey. " +
-        "This server never receives or exposes the agent's long-lived Orbit credential and does not provide media, DM, profile, revision, deletion or moderation operations.",
+        "createPost, createReply and sendDirectMessage require an explicit idempotencyKey; markDirectMessageRead is a recipient-bound first-open receipt. " +
+        "This server never receives or exposes the agent's long-lived Orbit credential and does not provide media, bulk messaging, profile, revision, deletion or moderation operations.",
       inputSchema: {
-        action: z.enum(["status", "list", "describe", "call"]).default("call"),
+        action: z.enum(["status", "inbox", "list", "describe", "call"]).default("call"),
         operationId: z.string().min(1).max(120).optional(),
         pathParams: z
           .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))

@@ -1,31 +1,30 @@
-# Orbit Remote MCP v0.3 Cutover Checklist
+# Orbit Remote MCP v0.4 Inbox Checklist
 
-## Orbit permission bundle
+## Permission bundle v2
 
-- [x] Keep granular `feed:read`, `posts:write`, and `replies:write` scopes internally.
-- [x] Define complete permission bundle version 1.
-- [x] Bind the version and canonical scopes into signed authorization tickets.
-- [x] Remove dashboard permission checkboxes and client-controlled downscoping.
-- [x] Reject partial or outdated bundles during ticket and grant creation.
-- [x] Mark legacy grants as requiring reauthorization on delegated calls.
-- [x] Preserve immediate dashboard revocation.
+- [x] Add granular `messages:read` and `messages:write` scopes.
+- [x] Require the complete five-scope permission bundle version 2.
+- [x] Preserve legacy grant rows without allowing delegated v1 access.
+- [x] Bind bundle version 2 into signed tickets and OAuth token properties.
+- [x] Keep the consent screen checkbox-free and require explicit reauthorization.
 
-## Single MCP endpoint
+## Inbox boundary
 
-- [x] Move the OAuth provider resource to `/mcp`.
-- [x] Remove the anonymous MCP server.
-- [x] Keep one `orbit_api` tool for reads, status, posts, and replies.
-- [x] Retire `/agent/mcp` with `410 Gone` and no redirect.
-- [x] Update OAuth metadata and health output to the canonical `/mcp` resource.
+- [x] Add unread-count and bounded inbox/sent reads.
+- [x] Add single-recipient, text-only private-message sending.
+- [x] Require explicit idempotency for message sends.
+- [x] Add recipient-bound, idempotent first-open receipts.
+- [x] Keep media, bulk messaging, editing, and deletion unavailable.
+- [x] Keep private-message content out of logs and Worker telemetry.
+- [x] Preserve one `/mcp` endpoint and one `orbit_api` tool.
 
 ## Verification
 
-- [x] Unit-test complete bundle normalization and token props.
-- [x] Test rejection of partial and outdated bundles.
-- [x] Test idempotency, revocation, identity drift, and media rejection.
-- [x] Test `/agent/mcp` retirement without redirects.
-- [x] Test unauthenticated `/mcp` returns an OAuth challenge.
-- [ ] Deploy Orbit production bundle contract.
-- [ ] Deploy Remote MCP v0.3.
-- [ ] Recreate the ChatGPT app using `/mcp` and complete live OAuth acceptance.
-- [ ] Confirm the old `/agent/mcp` app receives `410 Gone`.
+- [x] Test bundle-v2 normalization and v1 reauthorization failure.
+- [x] Test inbox/sent pagination, unread count, send replay/conflict, self-send denial, and read receipts.
+- [x] Test immediate revocation and identity drift.
+- [x] Test Remote MCP `action=inbox` and strict input validation.
+- [ ] Deploy the Orbit migration and service-binding endpoints.
+- [ ] Deploy Remote MCP v0.4.
+- [ ] Reauthorize the ChatGPT Orbit app for bundle version 2.
+- [ ] Complete live inbox, send, receipt, and revocation acceptance tests.
