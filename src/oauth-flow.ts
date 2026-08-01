@@ -1,7 +1,8 @@
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 
 import {
-  normalizeOrbitGrantScopes,
+  CURRENT_ORBIT_SCOPE_BUNDLE,
+  normalizeCurrentOrbitScopeBundle,
   ORBIT_GRANT_SCOPES,
   type OrbitGrantScope,
 } from "./orbit-scopes";
@@ -29,13 +30,9 @@ export function normalizeProviderScopes(requested: readonly string[]): string[] 
     throw new Error("The authorization request contains an unsupported scope");
   }
 
-  let delegated: OrbitGrantScope[];
-  try {
-    delegated = normalizeOrbitGrantScopes(values.filter((scope) => scope !== OPTIONAL_SCOPE));
-  } catch {
-    throw new Error("The feed:read scope is required and write scopes must be canonical");
-  }
-
+  const delegated = normalizeCurrentOrbitScopeBundle(
+    values.filter((scope) => scope !== OPTIONAL_SCOPE),
+  );
   return values.includes(OPTIONAL_SCOPE)
     ? [...delegated, OPTIONAL_SCOPE]
     : delegated;
@@ -44,7 +41,7 @@ export function normalizeProviderScopes(requested: readonly string[]): string[] 
 export function delegatedScopesFromProviderScopes(
   providerScopes: readonly string[],
 ): OrbitGrantScope[] {
-  return normalizeOrbitGrantScopes(
+  return normalizeCurrentOrbitScopeBundle(
     providerScopes.filter((scope) => scope !== OPTIONAL_SCOPE),
   );
 }
@@ -82,3 +79,5 @@ export function noStoreRedirect(location: string): Response {
     },
   });
 }
+
+export const CURRENT_DELEGATED_SCOPES = [...CURRENT_ORBIT_SCOPE_BUNDLE] as const;

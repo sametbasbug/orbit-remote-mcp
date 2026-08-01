@@ -57,6 +57,7 @@ function props(scopes: OrbitGrantScope[]): OrbitOAuthProps {
     agentId: "agent-1",
     handle: "selene",
     scopes,
+    scopeBundleVersion: 1,
   };
 }
 
@@ -67,6 +68,9 @@ function state(scopes: OrbitGrantScope[]) {
       accountId: "account-1",
       agent: { id: "agent-1", handle: "selene" },
       scopes,
+      scopeBundleVersion: 1,
+      currentScopeBundleVersion: 1,
+      upgradeRequired: false,
       oauthClient: { id: "client-1", label: "ChatGPT" },
       status: "active",
       createdAt: 1,
@@ -101,7 +105,7 @@ function publicApi(): OrbitPublicApi {
   });
 }
 
-test("filters private operations by the live read-only grant", async () => {
+test("rejects a legacy partial permission bundle", async () => {
   let stateCalls = 0;
   const scopes: OrbitGrantScope[] = ["feed:read"];
   const api = new OrbitAgentApi(
@@ -116,49 +120,15 @@ test("filters private operations by the live read-only grant", async () => {
     props(scopes),
   );
 
-  const listed = await api.run({ action: "list" });
-  const operationIds = (listed.operations as Array<{ operationId: string }>).map(
-    (operation) => operation.operationId,
-  );
-  assert.deepEqual(operationIds, ["listPublicFeed"]);
-  assert.deepEqual(listed.grantedScopes, ["feed:read"]);
-  assert.deepEqual(listed.connectedAgent, {
-    handle: "selene",
-    status: "active",
-    onboardingState: "active",
-    publicationMode: "direct_publish",
-  });
-  assert.equal(
-    (listed.statusAction as { action: string }).action,
-    "status",
-  );
-
-  const status = await api.run({ action: "status" });
-  assert.equal(status.readOnly, true);
-  assert.deepEqual(status.connectedAgent, {
-    handle: "selene",
-    status: "active",
-    onboardingState: "active",
-    publicationMode: "direct_publish",
-  });
-  assert.equal((status.authorization as { status: string }).status, "active");
-  assert.equal((status.recordCounts as { total: number }).total, 5);
-  assert.equal(JSON.stringify(status).includes("grant-1"), false);
-  assert.equal(JSON.stringify(status).includes("agent-1"), false);
-  assert.deepEqual(status.capabilities, []);
-
   await assert.rejects(
-    () => api.run({ action: "describe", operationId: "createPost" }),
-    /not available for this OAuth grant/u,
+    () => api.run({ action: "status" }),
+    /outdated delegated permission bundle/u,
   );
-
-  const publicResult = await api.run({ action: "call", operationId: "listPublicFeed" });
-  assert.equal(publicResult.status, 200);
-  assert.equal(stateCalls, 4);
+  assert.equal(stateCalls, 1);
 });
 
 test("requires explicit scope and idempotency for text-only post creation", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write"];
   const calls: Request[] = [];
   const api = new OrbitAgentApi(
     publicApi(),
@@ -188,7 +158,7 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, ["createPost", "listPublicFeed"]);
+  assert.deepEqual(operationIds, ["createPost", "createReply", "listPublicFeed"]);
   const createPost = (listed.operations as Array<Record<string, unknown>>).find(
     (operation) => operation.operationId === "createPost",
   );
@@ -238,10 +208,6 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
     /Unsupported body field: mediaId/u,
   );
   await assert.rejects(
-    () => api.run({ action: "call", operationId: "createReply" }),
-    /not available for this OAuth grant/u,
-  );
-  await assert.rejects(
     () => api.run({
       action: "call",
       operationId: "createPost",
@@ -277,8 +243,8 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   });
 });
 
-test("supports reply scope independently and revalidates revocation before every action", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "replies:write"];
+test("supports the full bundle and revalidates revocation before every action", async () => {
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write"];
   let revoked = false;
   let stateCalls = 0;
   const api = new OrbitAgentApi(
@@ -308,17 +274,18 @@ test("supports reply scope independently and revalidates revocation before every
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, ["createReply", "listPublicFeed"]);
+  assert.deepEqual(operationIds, ["createPost", "createReply", "listPublicFeed"]);
 
   const status = await api.run({ action: "status" });
   const capabilities = status.capabilities as Array<Record<string, unknown>>;
   assert.deepEqual(
     capabilities.map((operation) => operation.operationId),
-    ["createReply"],
+    ["createPost", "createReply"],
   );
-  assert.equal(capabilities[0]?.requiredScope, "replies:write");
+  const replyCapability = capabilities.find((operation) => operation.operationId === "createReply");
+  assert.equal(replyCapability?.requiredScope, "replies:write");
   assert.equal(
-    (capabilities[0]?.pathParameters as Array<{ name: string }>)[0]?.name,
+    (replyCapability?.pathParameters as Array<{ name: string }>)[0]?.name,
     "record",
   );
 
@@ -348,16 +315,17 @@ test("supports reply scope independently and revalidates revocation before every
   assert.equal(stateCalls, 6);
 });
 
-test("rejects live identity or scope drift from token-bound OAuth props", async () => {
-  const tokenScopes: OrbitGrantScope[] = ["feed:read", "posts:write"];
-  const liveScopes: OrbitGrantScope[] = ["feed:read"];
+test("rejects live identity drift from token-bound OAuth props", async () => {
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write"];
+  const drifted = state(scopes);
+  drifted.authorization.accountId = "account-2";
   const api = new OrbitAgentApi(
     publicApi(),
     new OrbitMcpApi({
       ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
-      ORBIT_SERVICE: service(() => jsonResponse(state(liveScopes))),
+      ORBIT_SERVICE: service(() => jsonResponse(drifted)),
     }),
-    props(tokenScopes),
+    props(scopes),
   );
 
   await assert.rejects(

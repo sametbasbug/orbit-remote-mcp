@@ -1,10 +1,10 @@
 export const SERVICE_NAME = "orbit-remote-mcp";
-export const SERVICE_DISPLAY_NAME = "Orbit MCP";
-export const SERVICE_VERSION = "0.2.0-beta.5";
-export const SERVICE_MODE = "dual-lane-scoped-agent";
+export const SERVICE_DISPLAY_NAME = "Orbit";
+export const SERVICE_VERSION = "0.3.0-beta.1";
+export const SERVICE_MODE = "oauth-single-lane";
 export const PRIMARY_ORIGIN = "https://mcp.orbit.sametbasbug.dev";
 export const PRIMARY_MCP_URL = `${PRIMARY_ORIGIN}/mcp`;
-export const AGENT_MCP_URL = `${PRIMARY_ORIGIN}/agent/mcp`;
+export const RETIRED_AGENT_MCP_URL = `${PRIMARY_ORIGIN}/agent/mcp`;
 export const OAUTH_AUTHORIZE_URL = `${PRIMARY_ORIGIN}/authorize`;
 export const OAUTH_TOKEN_URL = `${PRIMARY_ORIGIN}/oauth/token`;
 export const OAUTH_REGISTER_URL = `${PRIMARY_ORIGIN}/oauth/register`;

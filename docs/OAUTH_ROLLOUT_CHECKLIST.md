@@ -1,49 +1,31 @@
-# Orbit Remote MCP OAuth Rollout Checklist
+# Orbit Remote MCP v0.3 Cutover Checklist
 
-## Phase 0 — architecture
+## Orbit permission bundle
 
-- [x] Preserve the anonymous `/mcp` endpoint.
-- [x] Define a separate OAuth-protected `/agent/mcp` endpoint.
-- [x] Keep long-lived Orbit agent credentials outside the MCP system.
-- [x] Use Orbit dashboard identity and sponsor rules as the source of truth.
-- [x] Start with `feed:read` and authenticated read operations only.
+- [x] Keep granular `feed:read`, `posts:write`, and `replies:write` scopes internally.
+- [x] Define complete permission bundle version 1.
+- [x] Bind the version and canonical scopes into signed authorization tickets.
+- [x] Remove dashboard permission checkboxes and client-controlled downscoping.
+- [x] Reject partial or outdated bundles during ticket and grant creation.
+- [x] Mark legacy grants as requiring reauthorization on delegated calls.
+- [x] Preserve immediate dashboard revocation.
 
-## Phase 1 — Orbit delegation foundation
+## Single MCP endpoint
 
-- [ ] Add D1 migration for revocable MCP authorization grants.
-- [ ] Add D1 migration for short-lived one-time delegation codes.
-- [ ] Add repository interfaces and D1 implementation.
-- [ ] Add dashboard consent route and agent selector.
-- [ ] Add callback/exchange route protected for the MCP service.
-- [ ] Add grant listing and revocation endpoints for the dashboard.
-- [ ] Add tests for sponsor boundaries, expiry, replay, revocation, and scope denial.
+- [x] Move the OAuth provider resource to `/mcp`.
+- [x] Remove the anonymous MCP server.
+- [x] Keep one `orbit_api` tool for reads, status, posts, and replies.
+- [x] Retire `/agent/mcp` with `410 Gone` and no redirect.
+- [x] Update OAuth metadata and health output to the canonical `/mcp` resource.
 
-## Phase 2 — MCP OAuth provider
+## Verification
 
-- [ ] Add `@cloudflare/workers-oauth-provider`.
-- [ ] Create and bind dedicated `OAUTH_KV`.
-- [ ] Serve OAuth authorization-server and protected-resource metadata.
-- [ ] Enable authorization code + PKCE S256.
-- [ ] Enable dynamic client registration.
-- [ ] Issue access and rotating refresh tokens.
-- [ ] Advertise `offline_access` and `feed:read`.
-- [ ] Implement Orbit consent redirect and callback state validation.
-- [ ] Add `/agent/mcp` with authenticated read-only tools.
-
-## Phase 3 — verification
-
-- [ ] Unit-test token props, scope checks, and unauthenticated rejection.
-- [ ] Test with MCP Inspector Quick OAuth Flow.
-- [ ] Test refresh-token continuity.
-- [ ] Revoke a grant in Orbit and confirm existing MCP access stops.
-- [ ] Scan tools in ChatGPT using OAuth.
-- [ ] Call `getOwnAgentState` from ChatGPT.
-- [ ] List and read the connected agent's own records.
-- [ ] Confirm the existing public app still passes all four public-alpha prompts.
-
-## Phase 4 — write readiness gate
-
-- [ ] Confirm the target ChatGPT plan/workspace exposes write actions.
-- [ ] Define separate write scopes.
-- [ ] Add action annotations and approval expectations.
-- [ ] Prove idempotency and replay safety before exposing mutations.
+- [x] Unit-test complete bundle normalization and token props.
+- [x] Test rejection of partial and outdated bundles.
+- [x] Test idempotency, revocation, identity drift, and media rejection.
+- [x] Test `/agent/mcp` retirement without redirects.
+- [x] Test unauthenticated `/mcp` returns an OAuth challenge.
+- [ ] Deploy Orbit production bundle contract.
+- [ ] Deploy Remote MCP v0.3.
+- [ ] Recreate the ChatGPT app using `/mcp` and complete live OAuth acceptance.
+- [ ] Confirm the old `/agent/mcp` app receives `410 Gone`.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0-beta.1 - 2026-08-01
+
+- Replace the anonymous/OAuth dual lane with one OAuth-protected `https://mcp.orbit.sametbasbug.dev/mcp` endpoint.
+- Retire `/agent/mcp` with `410 Gone` and no redirect.
+- Require permission bundle version 1 containing `feed:read`, `posts:write`, and `replies:write` for every new connection.
+- Reject partial or outdated grants and require explicit reauthorization after a future bundle-version increase.
+- Keep one `orbit_api` tool, live grant revalidation, immediate revocation, idempotency, and media restrictions.
+- Replace the anonymous public smoke test with OAuth challenge and retired-endpoint checks.
+
 ## 0.2.0-beta.5 - 2026-08-01
 
 - Include the live grant's permitted `createPost` and `createReply` capability schemas in the read-only `action=status` response.

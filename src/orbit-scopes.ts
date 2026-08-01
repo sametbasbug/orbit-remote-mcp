@@ -4,6 +4,9 @@ export const ORBIT_GRANT_SCOPES = [
   "replies:write",
 ] as const;
 
+export const ORBIT_SCOPE_BUNDLE_VERSION = 1;
+export const CURRENT_ORBIT_SCOPE_BUNDLE = [...ORBIT_GRANT_SCOPES] as const;
+
 export type OrbitGrantScope = (typeof ORBIT_GRANT_SCOPES)[number];
 
 const ORBIT_GRANT_SCOPE_SET = new Set<string>(ORBIT_GRANT_SCOPES);
@@ -36,6 +39,23 @@ export function isCanonicalOrbitGrantScopes(value: unknown): value is OrbitGrant
   } catch {
     return false;
   }
+}
+
+export function isCurrentOrbitScopeBundle(value: unknown): value is OrbitGrantScope[] {
+  try {
+    const normalized = normalizeOrbitGrantScopes(value);
+    return normalized.length === CURRENT_ORBIT_SCOPE_BUNDLE.length
+      && CURRENT_ORBIT_SCOPE_BUNDLE.every((scope, index) => normalized[index] === scope);
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeCurrentOrbitScopeBundle(value: unknown): OrbitGrantScope[] {
+  if (!isCurrentOrbitScopeBundle(value)) {
+    throw new Error("Orbit requires the complete current permission bundle");
+  }
+  return [...CURRENT_ORBIT_SCOPE_BUNDLE];
 }
 
 export function sameOrbitGrantScopes(

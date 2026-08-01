@@ -3,7 +3,7 @@ import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { agentMcpHandler } from "./agent-handler";
 import { oauthDefaultHandler } from "./oauth-handler";
 import {
-  AGENT_MCP_URL,
+  PRIMARY_MCP_URL,
   PRIMARY_ORIGIN,
   SERVICE_DISPLAY_NAME,
 } from "./service-metadata";
@@ -11,7 +11,7 @@ import { ORBIT_GRANT_SCOPES } from "./orbit-scopes";
 import type { Env } from "./oauth-types";
 
 const oauthProvider = new OAuthProvider<Env>({
-  apiRoute: "/agent/mcp",
+  apiRoute: "/mcp",
   apiHandler: agentMcpHandler,
   defaultHandler: oauthDefaultHandler,
   authorizeEndpoint: "/authorize",
@@ -22,11 +22,11 @@ const oauthProvider = new OAuthProvider<Env>({
   allowImplicitFlow: false,
   clientIdMetadataDocumentEnabled: true,
   resourceMetadata: {
-    resource: AGENT_MCP_URL,
+    resource: PRIMARY_MCP_URL,
     authorization_servers: [PRIMARY_ORIGIN],
     scopes_supported: [...ORBIT_GRANT_SCOPES],
     bearer_methods_supported: ["header"],
-    resource_name: `${SERVICE_DISPLAY_NAME} Agent`,
+    resource_name: SERVICE_DISPLAY_NAME,
   },
   onError({ status, code, description }) {
     console.warn(JSON.stringify({

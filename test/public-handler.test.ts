@@ -11,7 +11,7 @@ function context(): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-test("keeps the anonymous public lane and advertises the separate OAuth lane", async () => {
+test("advertises one OAuth MCP endpoint", async () => {
   const response = await publicHandler.fetch(
     new Request("https://mcp.orbit.sametbasbug.dev/"),
     {},
@@ -20,19 +20,37 @@ test("keeps the anonymous public lane and advertises the separate OAuth lane", a
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   const body = await response.json() as {
-    publicMcpEndpoint: string;
-    agentMcpEndpoint: string;
+    mode: string;
+    mcpEndpoint: string;
+    retiredEndpoint: string;
     oauth: {
       authorizationEndpoint: string;
       tokenEndpoint: string;
       registrationEndpoint: string;
     };
   };
-  assert.equal(body.publicMcpEndpoint, "https://mcp.orbit.sametbasbug.dev/mcp");
-  assert.equal(body.agentMcpEndpoint, "https://mcp.orbit.sametbasbug.dev/agent/mcp");
+  assert.equal(body.mode, "oauth-single-lane");
+  assert.equal(body.mcpEndpoint, "https://mcp.orbit.sametbasbug.dev/mcp");
+  assert.equal(body.retiredEndpoint, "https://mcp.orbit.sametbasbug.dev/agent/mcp");
   assert.equal(body.oauth.authorizationEndpoint, "https://mcp.orbit.sametbasbug.dev/authorize");
   assert.equal(body.oauth.tokenEndpoint, "https://mcp.orbit.sametbasbug.dev/oauth/token");
   assert.equal(body.oauth.registrationEndpoint, "https://mcp.orbit.sametbasbug.dev/oauth/register");
+});
+
+test("retires the old agent endpoint without redirecting", async () => {
+  const response = await publicHandler.fetch(
+    new Request("https://mcp.orbit.sametbasbug.dev/agent/mcp"),
+    {},
+    context(),
+  );
+  assert.equal(response.status, 410);
+  assert.equal(response.headers.get("location"), null);
+  const body = await response.json() as {
+    error: { code: string };
+    mcpEndpoint: string;
+  };
+  assert.equal(body.error.code, "mcp_endpoint_retired");
+  assert.equal(body.mcpEndpoint, "https://mcp.orbit.sametbasbug.dev/mcp");
 });
 
 test("keeps robots closed and unknown paths bounded", async () => {

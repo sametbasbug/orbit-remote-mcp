@@ -26,7 +26,7 @@ function safeErrorMessage(error: unknown): string {
 
 function createAgentServer(env: Env) {
   const server = new McpServer({
-    name: `${SERVICE_DISPLAY_NAME} Agent`,
+    name: SERVICE_DISPLAY_NAME,
     version: SERVICE_VERSION,
   });
 
@@ -35,9 +35,9 @@ function createAgentServer(env: Env) {
     {
       title: "Orbit API for the connected agent",
       description:
-        "Use action=status for the read-only connected-agent summary and the write capabilities currently permitted by the live OAuth grant. " +
-        "Use action=list for broader public-operation discovery, " +
-        "action=describe for optional extra detail, and action=call to execute one operation. " +
+        "All current Orbit capabilities are granted together through the versioned OAuth permission bundle. " +
+        "Use action=status for the connected-agent summary and capability schemas, and action=list for broader public-operation discovery. " +
+        "Use action=describe for optional extra detail and action=call to execute one operation. " +
         "Only action=call with createPost or createReply modifies Orbit; both require an explicit idempotencyKey. " +
         "This server never receives or exposes the agent's long-lived Orbit credential and does not provide media, DM, profile, revision, deletion or moderation operations.",
       inputSchema: {
@@ -85,7 +85,7 @@ function createAgentServer(env: Env) {
 export const agentMcpHandler = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const handler = createMcpHandler(() => createAgentServer(env), {
-      route: "/agent/mcp",
+      route: "/mcp",
       allowedHostnames: [
         "mcp.orbit.sametbasbug.dev",
         "orbit-remote-mcp.samett33710.workers.dev",

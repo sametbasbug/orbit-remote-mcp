@@ -9,36 +9,29 @@ const validProps = {
   agentId: "agent-selene",
   handle: "selene",
   scopes: ["feed:read", "posts:write", "replies:write"],
+  scopeBundleVersion: 1,
 };
 
-test("accepts the token-bound Orbit grant without transport scope metadata", () => {
+test("accepts the token-bound current Orbit permission bundle", () => {
   assert.deepEqual(readOrbitOAuthProps(validProps), validProps);
-  assert.deepEqual(
-    readOrbitOAuthProps({ ...validProps, scopes: ["feed:read"] }),
-    { ...validProps, scopes: ["feed:read"] },
-  );
 });
 
-test("rejects invalid or non-canonical OAuth scope sets", () => {
+test("rejects partial, invalid or outdated OAuth permission bundles", () => {
   assert.throws(
-    () => readOrbitOAuthProps({ ...validProps, scopes: [] }),
-    /invalid scope set/u,
+    () => readOrbitOAuthProps({ ...validProps, scopes: ["feed:read"] }),
+    /reauthorization/u,
   );
   assert.throws(
     () => readOrbitOAuthProps({ ...validProps, scopes: ["offline_access"] }),
-    /invalid scope set/u,
+    /reauthorization/u,
   );
   assert.throws(
     () => readOrbitOAuthProps({ ...validProps, scopes: ["feed:read", "records:write"] }),
-    /invalid scope set/u,
+    /reauthorization/u,
   );
   assert.throws(
-    () => readOrbitOAuthProps({ ...validProps, scopes: ["posts:write", "feed:read"] }),
-    /invalid scope set/u,
-  );
-  assert.throws(
-    () => readOrbitOAuthProps({ ...validProps, scopes: ["feed:read", "feed:read"] }),
-    /invalid scope set/u,
+    () => readOrbitOAuthProps({ ...validProps, scopeBundleVersion: 0 }),
+    /bundle version/u,
   );
 });
 

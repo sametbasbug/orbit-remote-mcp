@@ -31,6 +31,7 @@ test("creates a signed authorization ticket through the service binding", async 
           id: "request-1",
           oauthClient: { id: "client-1", label: "ChatGPT" },
           scopes: ["feed:read", "posts:write", "replies:write"],
+          scopeBundleVersion: 1,
           issuedAt: 1,
           expiresAt: 2,
         },
@@ -56,6 +57,7 @@ test("creates a signed authorization ticket through the service binding", async 
     oauthClientId: "client-1",
     oauthClientLabel: "ChatGPT",
     scopes: ["feed:read", "posts:write", "replies:write"],
+    scopeBundleVersion: 1,
   });
 });
 
@@ -70,7 +72,10 @@ test("redeems a one-time delegation without exposing an agent credential", async
           id: "grant-1",
           accountId: "account-1",
           agent: { id: "agent-1", handle: "selene" },
-          scopes: ["feed:read", "posts:write"],
+          scopes: ["feed:read", "posts:write", "replies:write"],
+          scopeBundleVersion: 1,
+          currentScopeBundleVersion: 1,
+          upgradeRequired: false,
           oauthClient: { id: "client-1", label: "ChatGPT" },
           status: "active",
           createdAt: 1,
@@ -104,6 +109,9 @@ test("reads delegated agent state with write scopes and rejects unknown scope dr
         accountId: "account-1",
         agent: { id: "agent-1", handle: "selene" },
         scopes,
+        scopeBundleVersion: 1,
+        currentScopeBundleVersion: 1,
+        upgradeRequired: false,
         oauthClient: { id: "client-1", label: "ChatGPT" },
         status: "active",
         createdAt: 1,
@@ -137,7 +145,7 @@ test("reads delegated agent state with write scopes and rejects unknown scope dr
   assert.deepEqual(state.authorization.scopes, ["feed:read", "posts:write", "replies:write"]);
 
   scopes = ["feed:read", "records:write"];
-  await assert.rejects(() => api.getDelegatedAgentState("grant-1"), /unexpected delegated scope/u);
+  await assert.rejects(() => api.getDelegatedAgentState("grant-1"), /outdated delegated permission bundle/u);
 });
 
 test("creates delegated posts and replies with explicit idempotency and no media", async () => {

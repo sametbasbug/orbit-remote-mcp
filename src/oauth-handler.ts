@@ -13,6 +13,7 @@ import {
   orbitDashboardAuthorizationUrl,
 } from "./oauth-flow";
 import { OrbitMcpApi } from "./orbit-mcp-api";
+import { ORBIT_SCOPE_BUNDLE_VERSION, sameOrbitGrantScopes } from "./orbit-scopes";
 import type { Env, OrbitOAuthProps, StoredAuthorizationFlow } from "./oauth-types";
 
 function safeClientName(value: unknown, clientId: string): string {
@@ -66,7 +67,7 @@ async function beginAuthorization(request: Request, env: Env): Promise<Response>
     return terminalError(
       oauthRequest,
       "invalid_scope",
-      "Orbit Agent MCP requires feed:read and supports only posts:write, replies:write and offline_access in addition.",
+      "Orbit requires the complete current permission bundle: feed:read, posts:write and replies:write. offline_access remains optional.",
     );
   }
 
@@ -141,7 +142,9 @@ async function finishAuthorization(request: Request, env: Env): Promise<Response
     if (
       authorization.status !== "active"
       || authorization.oauthClient.id !== flow.request.clientId
-      || authorization.scopes.some((scope) => !requestedDelegatedScopes.includes(scope))
+      || authorization.scopeBundleVersion !== ORBIT_SCOPE_BUNDLE_VERSION
+      || authorization.upgradeRequired
+      || !sameOrbitGrantScopes(authorization.scopes, requestedDelegatedScopes)
     ) {
       throw new Error("Orbit delegation did not match the OAuth authorization request");
     }
@@ -152,6 +155,7 @@ async function finishAuthorization(request: Request, env: Env): Promise<Response
       agentId: authorization.agent.id,
       handle: authorization.agent.handle,
       scopes: [...authorization.scopes],
+      scopeBundleVersion: authorization.scopeBundleVersion,
     };
     const grantedProviderScopes = flow.providerScopes.includes("offline_access")
       ? [...authorization.scopes, "offline_access"]
