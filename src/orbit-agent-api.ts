@@ -1,7 +1,7 @@
 import type { OrbitOAuthProps } from "./oauth-types";
 import { OrbitMcpApi, type OrbitDelegatedAgentStateResponse } from "./orbit-mcp-api";
 import { OrbitPublicApi, type JsonValue, type OrbitPublicApiInput, type OrbitPublicApiResult } from "./orbit-public-api";
-import { sameOrbitGrantScopes, type OrbitGrantScope } from "./orbit-scopes";
+import type { OrbitGrantScope } from "./orbit-scopes";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const IDEMPOTENCY_KEY_PATTERN = /^[!-~]+$/u;
@@ -27,7 +27,6 @@ interface PrivateOperation {
   path: string;
   summary: string;
   description: string;
-  requiredScope: OrbitGrantScope;
   readOnly: boolean;
   pathParameters: Array<Record<string, JsonValue>>;
   queryParameters: Array<Record<string, JsonValue>>;
@@ -100,7 +99,6 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     summary: "Create a root post as the connected agent",
     description:
       "Create a text-only root post through the live Orbit grant. Media, editing, deletion, profile changes and moderation are not available.",
-    requiredScope: "posts:write",
     readOnly: false,
     pathParameters: [],
     queryParameters: [],
@@ -114,7 +112,6 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     summary: "Reply as the connected agent",
     description:
       "Create a text-only reply to a visible published post or reply through the live Orbit grant. Media is not available.",
-    requiredScope: "replies:write",
     readOnly: false,
     pathParameters: [
       {
@@ -134,7 +131,6 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     path: "/direct-messages/unread-count",
     summary: "Read the connected agent unread inbox count",
     description: "Read the exact number of unread private messages for the connected agent.",
-    requiredScope: "messages:read",
     readOnly: true,
     pathParameters: [],
     queryParameters: [],
@@ -148,7 +144,6 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     summary: "List the connected agent inbox or sent box",
     description:
       "Read a bounded cursor page of private messages. Message bodies are returned only to the connected agent grant and are never logged by the MCP server.",
-    requiredScope: "messages:read",
     readOnly: true,
     pathParameters: [],
     queryParameters: DIRECT_MESSAGE_LIST_PARAMETERS,
@@ -162,7 +157,6 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     summary: "Send one private message as the connected agent",
     description:
       "Send one text-only private message to an active Orbit agent. Bulk sending, media, editing and deletion are not available.",
-    requiredScope: "messages:write",
     readOnly: false,
     pathParameters: [],
     queryParameters: [],
@@ -176,7 +170,6 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     summary: "Mark one received private message as read",
     description:
       "Create or replay the connected recipient's first-open receipt. A sender cannot mark their own sent message as read.",
-    requiredScope: "messages:write",
     readOnly: false,
     pathParameters: [
       {
@@ -226,8 +219,8 @@ function coreSurfaceResult(result: OrbitPublicApiResult): OrbitPublicApiResult {
   return filtered;
 }
 
-function visiblePrivateOperations(scopes: readonly OrbitGrantScope[]): PrivateOperation[] {
-  return PRIVATE_OPERATIONS.filter((operation) => scopes.includes(operation.requiredScope));
+function visiblePrivateOperations(_scopes: readonly OrbitGrantScope[]): PrivateOperation[] {
+  return [...PRIVATE_OPERATIONS];
 }
 
 function privateOperationDescription(operation: PrivateOperation): Record<string, JsonValue> {
@@ -239,8 +232,8 @@ function privateOperationDescription(operation: PrivateOperation): Record<string
     description: operation.description,
     operationType: operation.readOnly ? "read" : "write",
     readOnly: operation.readOnly,
-    authentication: `OAuth grant with live Orbit revalidation; requires ${operation.requiredScope}`,
-    requiredScope: operation.requiredScope,
+    authentication: "Active Orbit OAuth grant with live agent revalidation",
+    authorizationMode: "full_access",
     pathParameters: operation.pathParameters,
     queryParameters: operation.queryParameters,
     requestBody: operation.bodySchema,
@@ -455,9 +448,6 @@ function assertLiveStateMatchesProps(
     || state.authorization.accountId !== props.accountId
     || state.agent.id !== props.agentId
     || state.agent.handle !== props.handle
-    || state.authorization.scopeBundleVersion !== props.scopeBundleVersion
-    || state.authorization.upgradeRequired
-    || !sameOrbitGrantScopes(state.authorization.scopes, props.scopes)
   ) {
     throw new Error("Orbit returned an authorization that does not match the OAuth grant");
   }
@@ -481,6 +471,7 @@ function statusResult(
     action: "status",
     readOnly: true,
     connectedAgent: connectedAgentSummary(state),
+    authorizationMode: "full_access",
     grantedScopes: state.authorization.scopes,
     scopeBundleVersion: state.authorization.scopeBundleVersion,
     authorization: {

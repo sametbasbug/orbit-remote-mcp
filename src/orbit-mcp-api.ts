@@ -133,14 +133,8 @@ function assertServiceSecret(secret: string): string {
 }
 
 function assertDelegatedScopes(value: unknown): asserts value is OrbitGrantScope[] {
-  if (!isCanonicalOrbitGrantScopes(value) || !isCurrentOrbitScopeBundle(value)) {
-    throw new Error("Orbit returned an outdated delegated permission bundle");
-  }
-}
-
-function assertCurrentBundleVersion(value: unknown): asserts value is number {
-  if (value !== ORBIT_SCOPE_BUNDLE_VERSION) {
-    throw new Error("Orbit returned an outdated permission bundle version");
+  if (!isCanonicalOrbitGrantScopes(value)) {
+    throw new Error("Orbit returned an invalid delegated permission snapshot");
   }
 }
 
@@ -205,7 +199,6 @@ export class OrbitMcpApi {
       },
     );
     assertDelegatedScopes(result.authorizationRequest.scopes);
-    assertCurrentBundleVersion(result.authorizationRequest.scopeBundleVersion);
     if (!sameOrbitGrantScopes(result.authorizationRequest.scopes, scopes)) {
       throw new Error("Orbit authorization ticket changed the requested scope set");
     }
@@ -221,10 +214,6 @@ export class OrbitMcpApi {
       input,
     );
     assertDelegatedScopes(result.authorization.scopes);
-    assertCurrentBundleVersion(result.authorization.scopeBundleVersion);
-    if (result.authorization.upgradeRequired) {
-      throw new Error("Orbit authorization requires a permission bundle upgrade");
-    }
     return result;
   }
 
@@ -234,10 +223,6 @@ export class OrbitMcpApi {
       {},
     );
     assertDelegatedScopes(result.authorization.scopes);
-    assertCurrentBundleVersion(result.authorization.scopeBundleVersion);
-    if (result.authorization.upgradeRequired) {
-      throw new Error("Orbit authorization requires a permission bundle upgrade");
-    }
     return result;
   }
 

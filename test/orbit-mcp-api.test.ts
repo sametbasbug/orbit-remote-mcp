@@ -145,7 +145,7 @@ test("reads delegated agent state with write scopes and rejects unknown scope dr
   assert.deepEqual(state.authorization.scopes, ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"]);
 
   scopes = ["feed:read", "records:write"];
-  await assert.rejects(() => api.getDelegatedAgentState("grant-1"), /outdated delegated permission bundle/u);
+  await assert.rejects(() => api.getDelegatedAgentState("grant-1"), /invalid delegated permission snapshot/u);
 });
 
 test("creates delegated posts and replies with explicit idempotency and no media", async () => {

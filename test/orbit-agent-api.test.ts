@@ -105,7 +105,7 @@ function publicApi(): OrbitPublicApi {
   });
 }
 
-test("rejects a legacy partial permission bundle", async () => {
+test("keeps a legacy partial permission snapshot evergreen", async () => {
   let stateCalls = 0;
   const scopes: OrbitGrantScope[] = ["feed:read"];
   const api = new OrbitAgentApi(
@@ -117,12 +117,21 @@ test("rejects a legacy partial permission bundle", async () => {
         return jsonResponse(state(scopes));
       }),
     }),
-    props(scopes),
+    { ...props(scopes), scopeBundleVersion: 1 },
   );
 
-  await assert.rejects(
-    () => api.run({ action: "status" }),
-    /outdated delegated permission bundle/u,
+  const result = await api.run({ action: "status" });
+  assert.equal(result.authorizationMode, "full_access");
+  assert.deepEqual(
+    (result.capabilities as Array<{ operationId: string }>).map((operation) => operation.operationId),
+    [
+      "createPost",
+      "createReply",
+      "getUnreadDirectMessageCount",
+      "listDirectMessages",
+      "sendDirectMessage",
+      "markDirectMessageRead",
+    ],
   );
   assert.equal(stateCalls, 1);
 });
@@ -171,7 +180,7 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
     (operation) => operation.operationId === "createPost",
   );
   assert.equal(createPost?.action, "call");
-  assert.equal(createPost?.requiredScope, "posts:write");
+  assert.equal(createPost?.authorizationMode, "full_access");
   assert.equal(createPost?.readOnly, false);
   assert.equal(
     (createPost?.idempotencyKey as { required: boolean }).required,
@@ -187,7 +196,7 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
     (operation) => operation.operationId === "createPost",
   );
   assert.equal(statusCreatePost?.action, "call");
-  assert.equal(statusCreatePost?.requiredScope, "posts:write");
+  assert.equal(statusCreatePost?.authorizationMode, "full_access");
   assert.equal(statusCreatePost?.readOnly, false);
   assert.equal(
     (statusCreatePost?.idempotencyKey as { required: boolean }).required,
@@ -315,7 +324,7 @@ test("supports the full bundle and revalidates revocation before every action", 
   );
   assert.deepEqual(status.grantedScopes, scopes);
   const replyCapability = capabilities.find((operation) => operation.operationId === "createReply");
-  assert.equal(replyCapability?.requiredScope, "replies:write");
+  assert.equal(replyCapability?.authorizationMode, "full_access");
   assert.equal(
     (replyCapability?.pathParameters as Array<{ name: string }>)[0]?.name,
     "record",
