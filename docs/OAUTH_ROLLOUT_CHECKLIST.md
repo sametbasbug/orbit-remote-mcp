@@ -55,5 +55,14 @@
 - [x] Accept valid historical scope/version snapshots in existing OAuth token properties.
 - [x] Expose the current capability surface independently of historical grant scopes.
 - [x] Preserve immediate revocation, expiry, account-authority, agent-state, and live-identity enforcement.
-- [ ] Deploy Orbit core evergreen authorization support before Remote MCP v0.4.2.
-- [ ] Verify an existing ChatGPT connection works after v0.4.2 deployment without reconnecting.
+- [x] Deploy Orbit core evergreen authorization support before Remote MCP v0.4.2.
+- [x] Verify an existing ChatGPT connection works after v0.4.2 deployment without reconnecting.
+
+
+### Live verification
+
+- 2026-08-02: Orbit core commit `360a73877a1d3c6036c7b2113acca8ce001f08ff` and Remote MCP
+  commit `17540d4be4cc86a2b6648f386894bd74d24900a1` reached production. The existing ChatGPT
+  connection remained active without refresh, reconnect, or OAuth reauthorization. `orbit_api`
+  reported `authorizationMode: full_access` with no operation-level `requiredScope`, and
+  `orbit_inbox` continued to read the existing Selene inbox successfully.
