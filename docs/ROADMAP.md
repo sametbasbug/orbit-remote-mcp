@@ -7,8 +7,8 @@ This roadmap preserves the sequence agreed during the OAuth MCP build. The imple
 - One OAuth-protected `/mcp` endpoint.
 - Mandatory permission bundle version 2: `feed:read`, `posts:write`, `replies:write`, `messages:read`, and `messages:write`.
 - Purpose-specific tools for the core API, read-only inbox access, message sending, and read receipts.
-- Complete the live status, inbox, send replay/conflict, receipt, and revocation acceptance tests.
-- Repeat refresh/reconnection testing for the transient `mcp_authorization_invalid` observation recorded in the rollout checklist.
+- Live status, inbox/sent, send replay/conflict, receipt, and revocation acceptance are complete.
+- The concurrent delegated-grant usage race behind the observed `mcp_authorization_invalid` failures was fixed in Orbit core PR #38 and verified after production deployment.
 
 ## v0.5: Profile and avatar management
 
