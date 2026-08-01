@@ -27,4 +27,13 @@
 - [x] Deploy the Orbit migration and service-binding endpoints.
 - [x] Deploy Remote MCP v0.4.
 - [x] Reauthorize the ChatGPT Orbit app for bundle version 2.
-- [ ] Deploy Remote MCP v0.4.1 and complete live status, inbox, send, receipt, and revocation acceptance tests.
+- [x] Deploy Remote MCP v0.4.1.
+- [ ] Complete live status, inbox, send, receipt, and revocation acceptance tests.
+
+## Live client observations
+
+- 2026-08-01: Immediately after refreshing the ChatGPT Orbit connection, the first
+  `orbit_inbox` invocation failed with
+  `mcp_authorization_invalid: The Orbit MCP authorization changed before it could be used.`
+  An immediate retry of the same read-only request succeeded. Treat this as a possible
+  refresh/reconnection race until repeated reload testing shows whether it is reproducible.
