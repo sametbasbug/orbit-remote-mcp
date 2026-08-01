@@ -14,6 +14,7 @@ export interface OrbitOAuthProps {
   agentId: string;
   handle: string;
   scopes: OrbitGrantScope[];
+  scopeBundleVersion: number;
 }
 
 export interface StoredAuthorizationFlow {

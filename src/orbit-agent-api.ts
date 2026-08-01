@@ -225,6 +225,8 @@ function assertLiveStateMatchesProps(
     || state.authorization.accountId !== props.accountId
     || state.agent.id !== props.agentId
     || state.agent.handle !== props.handle
+    || state.authorization.scopeBundleVersion !== props.scopeBundleVersion
+    || state.authorization.upgradeRequired
     || !sameOrbitGrantScopes(state.authorization.scopes, props.scopes)
   ) {
     throw new Error("Orbit returned an authorization that does not match the OAuth grant");
@@ -250,6 +252,7 @@ function statusResult(
     readOnly: true,
     connectedAgent: connectedAgentSummary(state),
     grantedScopes: state.authorization.scopes,
+    scopeBundleVersion: state.authorization.scopeBundleVersion,
     authorization: {
       status: state.authorization.status,
       expiresAt: state.authorization.expiresAt,

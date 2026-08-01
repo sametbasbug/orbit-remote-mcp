@@ -16,15 +16,14 @@ function authRequest(): AuthRequest {
     responseType: "code",
     clientId: "chatgpt-client",
     redirectUri: "https://chatgpt.com/aip/callback",
-    scope: ["feed:read"],
+    scope: ["feed:read", "posts:write", "replies:write"],
     state: "opaque-state",
     codeChallenge: "challenge",
     codeChallengeMethod: "S256",
   } as AuthRequest;
 }
 
-test("normalizes the least-privilege OAuth scopes", () => {
-  assert.deepEqual(normalizeProviderScopes(["feed:read"]), ["feed:read"]);
+test("requires the complete current OAuth permission bundle", () => {
   assert.deepEqual(
     normalizeProviderScopes(["replies:write", "feed:read", "posts:write"]),
     ["feed:read", "posts:write", "replies:write"],
@@ -39,16 +38,18 @@ test("normalizes the least-privilege OAuth scopes", () => {
     ]),
     ["feed:read", "posts:write", "replies:write", "offline_access"],
   );
-  assert.throws(() => normalizeProviderScopes([]), /feed:read/u);
-  assert.throws(() => normalizeProviderScopes(["posts:write"]), /feed:read/u);
+  assert.throws(() => normalizeProviderScopes([]), /complete current permission bundle/u);
+  assert.throws(() => normalizeProviderScopes(["feed:read"]), /complete current permission bundle/u);
+  assert.throws(() => normalizeProviderScopes(["posts:write"]), /complete current permission bundle/u);
   assert.throws(() => normalizeProviderScopes(["feed:read", "records:write"]), /unsupported/u);
   assert.deepEqual(
     delegatedScopesFromProviderScopes([
       "feed:read",
       "posts:write",
+      "replies:write",
       "offline_access",
     ]),
-    ["feed:read", "posts:write"],
+    ["feed:read", "posts:write", "replies:write"],
   );
 });
 

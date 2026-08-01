@@ -2,7 +2,9 @@ import { ORBIT_ORIGIN } from "./service-metadata";
 import type { Env } from "./oauth-types";
 import {
   isCanonicalOrbitGrantScopes,
-  normalizeOrbitGrantScopes,
+  isCurrentOrbitScopeBundle,
+  normalizeCurrentOrbitScopeBundle,
+  ORBIT_SCOPE_BUNDLE_VERSION,
   sameOrbitGrantScopes,
   type OrbitGrantScope,
 } from "./orbit-scopes";
@@ -23,6 +25,7 @@ export interface OrbitAuthorizationTicketResponse {
     id: string;
     oauthClient: { id: string; label: string };
     scopes: OrbitGrantScope[];
+    scopeBundleVersion: number;
     issuedAt: number;
     expiresAt: number;
   };
@@ -34,6 +37,9 @@ export interface OrbitDelegationRedemptionResponse {
     accountId: string;
     agent: { id: string; handle: string };
     scopes: OrbitGrantScope[];
+    scopeBundleVersion: number;
+    currentScopeBundleVersion: number;
+    upgradeRequired: boolean;
     oauthClient: { id: string; label: string };
     status: "active" | "expired" | "revoked";
     createdAt: number;
@@ -98,8 +104,14 @@ function assertServiceSecret(secret: string): string {
 }
 
 function assertDelegatedScopes(value: unknown): asserts value is OrbitGrantScope[] {
-  if (!isCanonicalOrbitGrantScopes(value)) {
-    throw new Error("Orbit returned an unexpected delegated scope set");
+  if (!isCanonicalOrbitGrantScopes(value) || !isCurrentOrbitScopeBundle(value)) {
+    throw new Error("Orbit returned an outdated delegated permission bundle");
+  }
+}
+
+function assertCurrentBundleVersion(value: unknown): asserts value is number {
+  if (value !== ORBIT_SCOPE_BUNDLE_VERSION) {
+    throw new Error("Orbit returned an outdated permission bundle version");
   }
 }
 
@@ -152,7 +164,7 @@ export class OrbitMcpApi {
     oauthClientLabel: string;
     scopes: OrbitGrantScope[];
   }): Promise<OrbitAuthorizationTicketResponse> {
-    const scopes = normalizeOrbitGrantScopes(input.scopes);
+    const scopes = normalizeCurrentOrbitScopeBundle(input.scopes);
     const result = await this.#post<OrbitAuthorizationTicketResponse>(
       "/v1/mcp/authorization-tickets",
       {
@@ -160,9 +172,11 @@ export class OrbitMcpApi {
         oauthClientId: input.oauthClientId,
         oauthClientLabel: input.oauthClientLabel,
         scopes,
+        scopeBundleVersion: ORBIT_SCOPE_BUNDLE_VERSION,
       },
     );
     assertDelegatedScopes(result.authorizationRequest.scopes);
+    assertCurrentBundleVersion(result.authorizationRequest.scopeBundleVersion);
     if (!sameOrbitGrantScopes(result.authorizationRequest.scopes, scopes)) {
       throw new Error("Orbit authorization ticket changed the requested scope set");
     }
@@ -178,6 +192,10 @@ export class OrbitMcpApi {
       input,
     );
     assertDelegatedScopes(result.authorization.scopes);
+    assertCurrentBundleVersion(result.authorization.scopeBundleVersion);
+    if (result.authorization.upgradeRequired) {
+      throw new Error("Orbit authorization requires a permission bundle upgrade");
+    }
     return result;
   }
 
@@ -187,6 +205,10 @@ export class OrbitMcpApi {
       {},
     );
     assertDelegatedScopes(result.authorization.scopes);
+    assertCurrentBundleVersion(result.authorization.scopeBundleVersion);
+    if (result.authorization.upgradeRequired) {
+      throw new Error("Orbit authorization requires a permission bundle upgrade");
+    }
     return result;
   }
 

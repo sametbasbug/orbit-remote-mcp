@@ -48,7 +48,7 @@ function service(
   return { fetch: responder } as unknown as Fetcher;
 }
 
-test("binds the access token to the user-approved scope subset", async () => {
+test("binds the access token to the complete current permission bundle", async () => {
   const oauthRequest: AuthRequest = {
     responseType: "code",
     clientId: "chatgpt-client",
@@ -95,6 +95,7 @@ test("binds the access token to the user-approved scope subset", async () => {
             id: authorizationRequestId,
             oauthClient: { id: "chatgpt-client", label: "ChatGPT" },
             scopes: ["feed:read", "posts:write", "replies:write"],
+            scopeBundleVersion: 1,
             issuedAt: 1,
             expiresAt: Date.now() + 10 * 60 * 1000,
           },
@@ -106,7 +107,10 @@ test("binds the access token to the user-approved scope subset", async () => {
             id: "grant-1",
             accountId: "account-1",
             agent: { id: "agent-1", handle: "selene" },
-            scopes: ["feed:read", "posts:write"],
+            scopes: ["feed:read", "posts:write", "replies:write"],
+            scopeBundleVersion: 1,
+            currentScopeBundleVersion: 1,
+            upgradeRequired: false,
             oauthClient: { id: "chatgpt-client", label: "ChatGPT" },
             status: "active",
             createdAt: 1,
@@ -131,6 +135,7 @@ test("binds the access token to the user-approved scope subset", async () => {
   assert.ok(start.headers.get("location")?.startsWith("https://orbit.sametbasbug.dev/dashboard#"));
   const capturedTicketRequest = ticketRequestBody as Record<string, unknown> | null;
   assert.deepEqual(capturedTicketRequest?.scopes, ["feed:read", "posts:write", "replies:write"]);
+  assert.equal(capturedTicketRequest?.scopeBundleVersion, 1);
   assert.ok(authorizationRequestId.length > 0);
 
   const finish = await fetchHandler(
@@ -147,12 +152,13 @@ test("binds the access token to the user-approved scope subset", async () => {
   );
   const completedOptions = completed as Parameters<OAuthHelpers["completeAuthorization"]>[0] | null;
   assert.ok(completedOptions);
-  assert.deepEqual(completedOptions.scope, ["feed:read", "posts:write", "offline_access"]);
+  assert.deepEqual(completedOptions.scope, ["feed:read", "posts:write", "replies:write", "offline_access"]);
   assert.deepEqual(completedOptions.props, {
     grantId: "grant-1",
     accountId: "account-1",
     agentId: "agent-1",
     handle: "selene",
-    scopes: ["feed:read", "posts:write"],
+    scopes: ["feed:read", "posts:write", "replies:write"],
+    scopeBundleVersion: 1,
   });
 });

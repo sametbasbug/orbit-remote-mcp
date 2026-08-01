@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-
 const DEFAULT_MCP_URL = "https://mcp.orbit.sametbasbug.dev/mcp";
 const endpoint = new URL(process.env.ORBIT_MCP_URL ?? DEFAULT_MCP_URL);
 const healthUrl = new URL("/health", endpoint);
@@ -17,62 +15,48 @@ async function main() {
     ok?: unknown;
     service?: unknown;
     version?: unknown;
+    mode?: unknown;
+    mcpEndpoint?: unknown;
     orbit?: { status?: unknown; operationCount?: unknown };
   };
   assert.equal(health.ok, true);
   assert.equal(health.service, "orbit-remote-mcp");
+  assert.equal(health.mode, "oauth-single-lane");
+  assert.equal(health.mcpEndpoint, DEFAULT_MCP_URL);
   assert.equal(health.orbit?.status, "reachable");
   assert.equal(typeof health.orbit?.operationCount, "number");
 
-  const client = new Client({ name: "orbit-remote-mcp-live-smoke", version: "0.1.1" });
-  const transport = new StreamableHTTPClientTransport(endpoint);
-
-  try {
-    await client.connect(transport);
-
-    const tools = await client.listTools();
-    assert.ok(tools.tools.some((tool) => tool.name === "orbit_api"), "orbit_api tool was not discovered.");
-
-    const result = await client.callTool({
-      name: "orbit_api",
-      arguments: {
-        action: "call",
-        operationId: "listPublicFeed",
-        query: { limit: 1 },
+  const challenge = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "orbit-mcp-live-smoke", version: "0.3.0" },
       },
-    });
+    }),
+    redirect: "manual",
+  });
+  assert.equal(challenge.status, 401, `Unauthenticated MCP returned HTTP ${challenge.status}.`);
+  const authenticate = challenge.headers.get("www-authenticate") ?? "";
+  assert.match(authenticate, /Bearer/iu);
+  assert.match(authenticate, /resource_metadata/iu);
 
-    assert.notEqual(result.isError, true, "orbit_api returned an MCP tool error.");
-    const textBlock = result.content.find(
-      (item): item is Extract<(typeof result.content)[number], { type: "text" }> => item.type === "text",
-    );
-    assert.ok(textBlock, "orbit_api returned no text result.");
-
-    const payload = JSON.parse(textBlock.text) as {
-      ok?: unknown;
-      status?: unknown;
-      body?: { records?: unknown };
-    };
-    assert.equal(payload.ok, true);
-    assert.equal(payload.status, 200);
-    assert.ok(Array.isArray(payload.body?.records));
-
-    console.log(
-      JSON.stringify(
-        {
-          ok: true,
-          endpoint: endpoint.toString(),
-          serviceVersion: health.version,
-          operationCount: health.orbit?.operationCount,
-          feedRecordsReturned: payload.body.records.length,
-        },
-        null,
-        2,
-      ),
-    );
-  } finally {
-    await client.close();
-  }
+  console.log(JSON.stringify({
+    ok: true,
+    endpoint: endpoint.toString(),
+    serviceVersion: health.version,
+    mode: health.mode,
+    operationCount: health.orbit?.operationCount,
+    unauthenticatedStatus: challenge.status,
+  }, null, 2));
 }
 
 await main();
