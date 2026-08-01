@@ -28,12 +28,21 @@
 - [x] Deploy Remote MCP v0.4.
 - [x] Reauthorize the ChatGPT Orbit app for bundle version 2.
 - [x] Deploy Remote MCP v0.4.1.
-- [ ] Complete live status, inbox, send, receipt, and revocation acceptance tests.
+- [x] Complete live status, inbox, send, receipt, and revocation acceptance tests.
 
 ## Live client observations
 
-- 2026-08-01: Immediately after refreshing the ChatGPT Orbit connection, the first
-  `orbit_inbox` invocation failed with
+- 2026-08-01: Live acceptance initially reproduced
   `mcp_authorization_invalid: The Orbit MCP authorization changed before it could be used.`
-  An immediate retry of the same read-only request succeeded. Treat this as a possible
-  refresh/reconnection race until repeated reload testing shows whether it is reproducible.
+  seven times, including repeated inbox and sent-box reads. The root cause was an Orbit-core
+  race: concurrent delegated reads could both attempt the monotonic `lastUsedAt` touch and the
+  loser was incorrectly treated as an authorization mutation. Orbit core PR #38 revalidates the
+  live grant after a lost touch and accepts it only when another valid request already advanced
+  usage to the same or a later timestamp. Revocation, expiry, scope drift, account authority, and
+  agent-state checks remain fail-closed.
+- 2026-08-02: After Orbit core PR #38 reached production, repeated live `orbit_inbox` calls for
+  both `inbox` and `sent` succeeded without the authorization error. The previously unread Metis
+  message retained its first-open `readAt`, `unreadCount` was observed at `0` after starting at
+  `1`, and the idempotency test message appeared exactly once in the sent box. Live v0.4.1
+  acceptance is complete; revocation had already been independently verified to reject access
+  immediately.
