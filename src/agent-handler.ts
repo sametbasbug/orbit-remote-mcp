@@ -7,17 +7,33 @@ import { OrbitAgentApi } from "./orbit-agent-api";
 import { OrbitMcpApi } from "./orbit-mcp-api";
 import { OrbitPublicApi } from "./orbit-public-api";
 import { SERVICE_DISPLAY_NAME, SERVICE_VERSION } from "./service-metadata";
-import { ORBIT_READ_ACTIONS, ORBIT_TOOL_ANNOTATIONS } from "./tool-surface";
+import { ORBIT_READ_ACTIONS, ORBIT_TOOL_ANNOTATIONS, ORBIT_TOOL_OUTPUT_SCHEMA } from "./tool-surface";
 import type { Env } from "./oauth-types";
 
-function textResult(value: unknown) {
+type ToolOutputEnvelope = {
+  schemaVersion: 1;
+  ok: boolean;
+  data: Record<string, unknown> | null;
+  error: string | null;
+};
+
+function structuredData(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return { value: value ?? null };
+}
+
+function structuredResult(envelope: ToolOutputEnvelope, isError = false) {
   return {
+    ...(isError ? { isError: true as const } : {}),
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(value, null, 2),
+        text: JSON.stringify(envelope, null, 2),
       },
     ],
+    structuredContent: envelope,
   };
 }
 
@@ -37,12 +53,22 @@ function createAgentApi(env: Env): OrbitAgentApi {
 
 async function toolResult(run: () => Promise<unknown>) {
   try {
-    return textResult(await run());
+    return structuredResult({
+      schemaVersion: 1,
+      ok: true,
+      data: structuredData(await run()),
+      error: null,
+    });
   } catch (error) {
-    return {
-      isError: true,
-      ...textResult({ ok: false, error: safeErrorMessage(error) }),
-    };
+    return structuredResult(
+      {
+        schemaVersion: 1,
+        ok: false,
+        data: null,
+        error: safeErrorMessage(error),
+      },
+      true,
+    );
   }
 }
 
@@ -71,6 +97,7 @@ function createAgentServer(env: Env) {
           .optional(),
         refreshContract: z.boolean().default(false),
       },
+      outputSchema: ORBIT_TOOL_OUTPUT_SCHEMA,
       annotations: ORBIT_TOOL_ANNOTATIONS.orbit_read,
     },
     async (input) => toolResult(() => createAgentApi(env).runRead(input)),
@@ -96,6 +123,7 @@ function createAgentServer(env: Env) {
         body: z.record(z.string(), z.unknown()).optional(),
         idempotencyKey: z.string().min(1).max(128).optional(),
       },
+      outputSchema: ORBIT_TOOL_OUTPUT_SCHEMA,
       annotations: ORBIT_TOOL_ANNOTATIONS.orbit_action,
     },
     async (input) => toolResult(() => createAgentApi(env).runAction(input)),
