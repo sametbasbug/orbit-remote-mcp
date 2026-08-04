@@ -75,5 +75,14 @@
 - [x] Return live operation routing and schemas through `orbit_read` discovery so future capabilities do not require new MCP tools.
 - [x] Keep stable generic path/query/body/idempotency inputs on `orbit_action` for future operation growth.
 - [x] Preserve evergreen authorization, live identity/revocation checks, idempotency, and existing Orbit operation validation.
-- [ ] Deploy v0.4.3 and refresh the ChatGPT app once to replace the legacy four-tool cache.
-- [ ] Verify live read and action calls after that one-time refresh.
+- [x] Deploy v0.4.3 and refresh the ChatGPT app once to replace the legacy four-tool cache.
+- [x] Verify live read and action calls after that one-time refresh.
+
+## v0.4.4 structured output
+
+- [x] Declare one stable `outputSchema` for both permanent MCP tools.
+- [x] Return matching `structuredContent` plus equivalent text content for every success and bounded error.
+- [x] Keep operation-specific result fields inside dynamic `data` so future capabilities do not require tool-definition growth.
+- [x] Preserve the two-tool input surface, tool annotations, evergreen authorization, live revalidation, and operation validation.
+- [ ] Deploy v0.4.4 and refresh the ChatGPT app once so the client caches the new output schemas.
+- [ ] Verify the ChatGPT app no longer shows the output-schema recommendation for either tool and confirm live read/action behavior.

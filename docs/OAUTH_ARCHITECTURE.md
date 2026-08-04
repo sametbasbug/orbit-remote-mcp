@@ -99,6 +99,8 @@ The tool list and top-level input shape are intentionally stable. `orbit_read(ac
 
 The read surface rejects mutations and the action surface rejects read-only calls before execution. This preserves client safety classification without requiring a new tool definition for each profile, media, publication, messaging, or other future capability. Live Orbit authorization checks remain shared across both tools.
 
+Both tools also declare the same permanent MCP output schema. Responses use a versioned envelope with `schemaVersion`, `ok`, dynamic object `data`, and bounded nullable `error`, and the server emits matching `structuredContent`. Operation-specific result growth therefore stays inside `data` instead of changing the two tool definitions.
+
 ## OAuth provider
 
 The Worker uses:

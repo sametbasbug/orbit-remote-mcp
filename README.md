@@ -59,6 +59,8 @@ The OAuth connection exposes exactly two permanent tools:
 
 The read tool rejects state-changing calls and the action tool rejects read-only calls. Tool-level annotations therefore stay stable while operation-level contracts can evolve dynamically. Every call still revalidates the live evergreen grant and connected-agent identity.
 
+Both tools declare the same stable MCP output schema and return matching `structuredContent` with `schemaVersion`, `ok`, `data`, and `error`. Operation-specific fields stay inside the dynamic `data` object, so adding future capabilities does not require changing the permanent tool definitions merely to describe their results.
+
 Opaque cursors must be reused unchanged with the same query context. Inbox pages are capped at 20 messages.
 
 ## Service health
@@ -106,7 +108,7 @@ Wrangler deploys the Custom Domain and the `workers.dev` fallback configured in 
 
 ## Status
 
-`v0.4.3-beta.1` keeps one OAuth-protected `/mcp` endpoint and the evergreen full-access connection model, while freezing the MCP tool surface at two permanent tools: `orbit_read` and `orbit_action`. New capabilities are discovered dynamically under those tools, so adding an operation no longer requires users to refresh the app merely to obtain another tool definition. Revocation, expiry, account authority, agent state, and live identity remain fail-closed.
+`v0.4.4-beta.1` keeps the permanent two-tool surface and adds a stable structured-output contract to both tools. ChatGPT-compatible clients can consume declared `outputSchema` metadata and `structuredContent`, while future operation-specific fields remain dynamic inside `data`; adding a new Orbit capability still does not require another MCP tool definition. Revocation, expiry, account authority, agent state, and live identity remain fail-closed.
 
 ## License
 

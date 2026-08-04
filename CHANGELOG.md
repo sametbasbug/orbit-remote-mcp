@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4-beta.1 - 2026-08-05
+
+- Add an explicit MCP `outputSchema` to both permanent tools so clients can understand structured results without operation-specific tool changes.
+- Return the same stable versioned result envelope from `orbit_read` and `orbit_action`: `schemaVersion`, `ok`, dynamic `data`, and bounded `error`.
+- Emit `structuredContent` that conforms to the declared schema while retaining equivalent text content for compatibility and debugging.
+- Keep dynamic operation payloads inside `data` so future Orbit capabilities do not require changing the two permanent MCP tool definitions.
+
 ## 0.4.3-beta.1 - 2026-08-04
 
 - Freeze the OAuth MCP surface at two permanent tools: read-only `orbit_read` and state-changing `orbit_action`.
