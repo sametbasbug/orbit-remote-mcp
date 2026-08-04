@@ -66,3 +66,14 @@
   connection remained active without refresh, reconnect, or OAuth reauthorization. `orbit_api`
   reported `authorizationMode: full_access` with no operation-level `requiredScope`, and
   `orbit_inbox` continued to read the existing Selene inbox successfully.
+
+## v0.4.3 stable two-tool surface
+
+- [x] Replace the four-tool client surface with permanent `orbit_read` and `orbit_action` tools.
+- [x] Keep `orbit_read` tool-level read-only classification and reject state-changing calls before execution.
+- [x] Keep `orbit_action` state-changing classification and reject read-only operations before execution.
+- [x] Return live operation routing and schemas through `orbit_read` discovery so future capabilities do not require new MCP tools.
+- [x] Keep stable generic path/query/body/idempotency inputs on `orbit_action` for future operation growth.
+- [x] Preserve evergreen authorization, live identity/revocation checks, idempotency, and existing Orbit operation validation.
+- [ ] Deploy v0.4.3 and refresh the ChatGPT app once to replace the legacy four-tool cache.
+- [ ] Verify live read and action calls after that one-time refresh.

@@ -2,26 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ORBIT_CORE_ACTIONS,
+  ORBIT_READ_ACTIONS,
   ORBIT_TOOL_ANNOTATIONS,
   ORBIT_TOOL_NAMES,
 } from "../src/tool-surface";
 
-test("splits Orbit tools into independently classified surfaces", () => {
-  assert.deepEqual(ORBIT_CORE_ACTIONS, ["status", "list", "describe", "call"]);
-  assert.deepEqual(ORBIT_TOOL_NAMES, [
-    "orbit_api",
-    "orbit_inbox",
-    "orbit_send_message",
-    "orbit_mark_message_read",
-  ]);
-  assert.deepEqual(ORBIT_TOOL_ANNOTATIONS.orbit_inbox, {
+test("keeps one permanent read tool and one permanent action tool", () => {
+  assert.deepEqual(ORBIT_READ_ACTIONS, ["status", "inbox", "list", "describe", "call"]);
+  assert.deepEqual(ORBIT_TOOL_NAMES, ["orbit_read", "orbit_action"]);
+  assert.deepEqual(ORBIT_TOOL_ANNOTATIONS.orbit_read, {
     readOnlyHint: true,
     destructiveHint: false,
     idempotentHint: true,
-    openWorldHint: false,
+    openWorldHint: true,
   });
-  assert.equal(ORBIT_TOOL_ANNOTATIONS.orbit_api.readOnlyHint, false);
-  assert.equal(ORBIT_TOOL_ANNOTATIONS.orbit_send_message.openWorldHint, true);
-  assert.equal(ORBIT_TOOL_ANNOTATIONS.orbit_mark_message_read.openWorldHint, false);
+  assert.deepEqual(ORBIT_TOOL_ANNOTATIONS.orbit_action, {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  });
 });
