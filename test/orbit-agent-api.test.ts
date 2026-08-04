@@ -301,37 +301,56 @@ test("supports the full bundle and revalidates revocation before every action", 
     "sendDirectMessage",
   ]);
 
-  const coreListed = await api.runCore({ action: "list" });
+  const readListed = await api.runRead({ action: "list" });
+  const readOperations = readListed.operations as Array<{ operationId: string; tool?: string }>;
   assert.deepEqual(
-    (coreListed.operations as Array<{ operationId: string }>).map((operation) => operation.operationId),
-    ["createPost", "createReply", "listPublicFeed"],
+    readOperations.map((operation) => operation.operationId),
+    operationIds,
   );
-  assert.equal(coreListed.inboxAction, undefined);
-  await assert.rejects(
-    () => api.runCore({ action: "call", operationId: "sendDirectMessage" }),
-    /dedicated Orbit messaging tool/u,
+  assert.equal(
+    readOperations.find((operation) => operation.operationId === "listPublicFeed")?.tool,
+    "orbit_read",
+  );
+  assert.equal(
+    readOperations.find((operation) => operation.operationId === "sendDirectMessage")?.tool,
+    "orbit_action",
   );
   await assert.rejects(
-    () => api.runCore({ action: "inbox" }),
-    /does not expose inbox operations/u,
+    () => api.runRead({ action: "call", operationId: "sendDirectMessage" }),
+    /Use orbit_action/u,
   );
 
-  const status = await api.runCore({ action: "status" });
+  const status = await api.runRead({ action: "status" });
   const capabilities = status.capabilities as Array<Record<string, unknown>>;
   assert.deepEqual(
     capabilities.map((operation) => operation.operationId),
-    ["createPost", "createReply"],
+    [
+      "createPost",
+      "createReply",
+      "getUnreadDirectMessageCount",
+      "listDirectMessages",
+      "sendDirectMessage",
+      "markDirectMessageRead",
+    ],
   );
   assert.deepEqual(status.grantedScopes, scopes);
   const replyCapability = capabilities.find((operation) => operation.operationId === "createReply");
   assert.equal(replyCapability?.authorizationMode, "full_access");
+  assert.equal(replyCapability?.tool, "orbit_action");
   assert.equal(
     (replyCapability?.pathParameters as Array<{ name: string }>)[0]?.name,
     "record",
   );
+  await assert.rejects(
+    () => api.runAction({ operationId: "listDirectMessages" }),
+    /Use orbit_read/u,
+  );
+  await assert.rejects(
+    () => api.runAction({ operationId: "listPublicFeed" }),
+    /Unknown or read-only Orbit action/u,
+  );
 
-  const reply = await api.run({
-    action: "call",
+  const reply = await api.runAction({
     operationId: "createReply",
     pathParams: { record: "root-post" },
     body: { bodyMarkdown: "Reply through OAuth" },
@@ -421,10 +440,9 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
     props(scopes),
   );
 
-  const inbox = await api.readInbox({
-    box: "inbox",
-    limit: 10,
-    cursor: "opaque-cursor",
+  const inbox = await api.runRead({
+    action: "inbox",
+    query: { box: "inbox", limit: 10, cursor: "opaque-cursor" },
   });
   assert.equal(inbox.action, "inbox");
   assert.equal(inbox.readOnly, true);
@@ -466,9 +484,9 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
     /Unsupported body field: mediaId/u,
   );
 
-  const sent = await api.sendMessage({
-    recipientHandle: "nyx",
-    bodyMarkdown: "Mesaj alındı.",
+  const sent = await api.runAction({
+    operationId: "sendDirectMessage",
+    body: { recipientHandle: "nyx", bodyMarkdown: "Mesaj alındı." },
     idempotencyKey: "dm-key-1",
   });
   assert.equal(sent.status, 201);
@@ -491,7 +509,10 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
     }),
     /does not accept idempotencyKey/u,
   );
-  const read = await api.markMessageRead({ messageId: "dm-1" });
+  const read = await api.runAction({
+    operationId: "markDirectMessageRead",
+    pathParams: { id: "dm-1" },
+  });
   assert.equal(read.status, 200);
   assert.deepEqual(read.body, { directMessage: { id: "dm-1", readAt: 12 } });
   const readRequest = calls.find((request) => new URL(request.url).pathname.endsWith("/direct-messages/dm-1/read"));

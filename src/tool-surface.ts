@@ -1,35 +1,18 @@
-export const ORBIT_CORE_ACTIONS = ["status", "list", "describe", "call"] as const;
+export const ORBIT_READ_ACTIONS = ["status", "inbox", "list", "describe", "call"] as const;
 
-export const ORBIT_TOOL_NAMES = [
-  "orbit_api",
-  "orbit_inbox",
-  "orbit_send_message",
-  "orbit_mark_message_read",
-] as const;
+export const ORBIT_TOOL_NAMES = ["orbit_read", "orbit_action"] as const;
 
 export const ORBIT_TOOL_ANNOTATIONS = {
-  orbit_api: {
-    readOnlyHint: false,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: true,
-  },
-  orbit_inbox: {
+  orbit_read: {
     readOnlyHint: true,
     destructiveHint: false,
     idempotentHint: true,
-    openWorldHint: false,
-  },
-  orbit_send_message: {
-    readOnlyHint: false,
-    destructiveHint: false,
-    idempotentHint: true,
     openWorldHint: true,
   },
-  orbit_mark_message_read: {
+  orbit_action: {
     readOnlyHint: false,
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
-    openWorldHint: false,
+    openWorldHint: true,
   },
 } as const;

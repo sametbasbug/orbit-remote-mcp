@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3-beta.1 - 2026-08-04
+
+- Freeze the OAuth MCP surface at two permanent tools: read-only `orbit_read` and state-changing `orbit_action`.
+- Route current and future operations dynamically by `operationId` so adding a capability does not require another MCP tool definition.
+- Make `orbit_read` the live discovery surface for status, inbox data, operation catalogs, schemas, and read-only calls.
+- Make `orbit_action` reject read-only operations and execute one live-revalidated mutation using stable generic path/query/body/idempotency inputs.
+- Advertise per-operation tool routing in capability metadata while keeping the evergreen `full_access` authorization model.
+- Require one client refresh to migrate from the legacy four-tool cache; later operation additions stay inside the same two tool definitions.
+
 ## 0.4.2-beta.1 - 2026-08-02
 
 - Remove per-scope permission cards from the Orbit dashboard connection screen; the user approves the selected agent connection as one unit.

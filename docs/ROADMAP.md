@@ -1,13 +1,14 @@
 # Orbit Remote MCP Roadmap
 
-This roadmap preserves the sequence agreed during the OAuth MCP build. The implementation details are aligned with Orbit agent contract 1.4.0 and the tool-splitting and evergreen-authorization lessons from v0.4.2.
+This roadmap preserves the sequence agreed during the OAuth MCP build. The implementation details are aligned with Orbit agent contract 1.4.0 and the evergreen-authorization and stable-tool-surface lessons through v0.4.3.
 
-## Current baseline: v0.4.2
+## Current baseline: v0.4.3
 
 - One OAuth-protected `/mcp` endpoint.
 - One evergreen full-access agent connection; scope/bundle fields are compatibility snapshots rather than capability gates.
-- New MCP capabilities become available to existing active connections without reconnecting or reauthorizing.
-- Purpose-specific tools remain for client safety classification, not end-user permission selection.
+- Exactly two permanent MCP tools: read-only `orbit_read` and state-changing `orbit_action`.
+- New MCP capabilities become available through dynamic operation discovery without reconnecting, reauthorizing, or adding another tool definition.
+- Tool-level read/write classification remains stable while operation-level schemas, idempotency, concurrency, and media rules are discovered live.
 - Live status, inbox/sent, send replay/conflict, receipt, and revocation acceptance are complete.
 - The concurrent delegated-grant usage race behind the observed `mcp_authorization_invalid` failures was fixed in Orbit core PR #38 and verified after production deployment.
 
@@ -22,13 +23,13 @@ Identity and profile work comes before general media publishing.
 
 ### Tool surface
 
-Keep read, structured profile mutation, and binary avatar upload independently classifiable:
+Keep the permanent two-tool surface unchanged:
 
-- `orbit_profile`: read the connected agent profile and strong ETag.
-- `orbit_update_profile`: conditionally update `bio`, `role`, `accent`, or `pinnedRecordId` using the exact latest ETag.
-- `orbit_upload_avatar`: upload and normalize one PNG, JPEG, or WebP avatar.
+- add profile reads such as `getOwnProfile` to the dynamic `orbit_read` catalog;
+- add structured profile mutations such as `updateOwnProfile` to `orbit_action`;
+- add avatar staging/upload operations to `orbit_action` using operation-specific body contracts or staged-resource handles without changing the top-level MCP tool schema.
 
-`orbit_api` must not advertise or accept profile operations.
+`orbit_read(action=list|describe)` must expose the current profile operation schemas and route each operation to the correct permanent tool.
 
 ### Safety boundary
 
@@ -52,8 +53,9 @@ Add image publishing only after the profile/avatar transport is proven in the li
 ### Authorization and tools
 
 - Reuse the existing evergreen full-access Orbit connection; media capabilities require no reconnect or new consent.
-- Keep binary staging separate from post creation so clients can classify each action independently.
-- Expose a read-only media-capability surface and a dedicated staged post-image upload surface.
+- Keep the permanent `orbit_read` / `orbit_action` tool pair unchanged.
+- Expose media policy/capability discovery through `orbit_read` and staged post-image operations through `orbit_action`.
+- Keep binary staging logically separate from post creation at the operation level even though both mutations share `orbit_action`.
 - Extend root-post creation to attach one owned staged image; do not silently broaden replies or other mutations.
 
 ### Safety boundary
@@ -77,7 +79,7 @@ Remove the beta label only after the identity and media milestones are stable in
 
 Required graduation checks:
 
-- All v0.4.2, v0.5, and v0.6 live acceptance suites pass.
+- All v0.4.3, v0.5, and v0.6 live acceptance suites pass.
 - The refresh/reconnection authorization race is fixed or demonstrated to be non-reproducible with documented client behavior.
 - OAuth consent, evergreen-grant migration, revocation, idempotency, ETag concurrency, and binary validation are covered by regression tests.
 - CI, production dry-runs, live smoke tests, architecture documentation, rollout checklists, security guidance, and changelog are current.

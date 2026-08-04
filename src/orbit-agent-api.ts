@@ -14,13 +14,6 @@ type PrivateOperationId =
   | "sendDirectMessage"
   | "markDirectMessageRead";
 
-const MESSAGE_OPERATION_IDS = new Set<PrivateOperationId>([
-  "getUnreadDirectMessageCount",
-  "listDirectMessages",
-  "sendDirectMessage",
-  "markDirectMessageRead",
-]);
-
 interface PrivateOperation {
   operationId: PrivateOperationId;
   method: "GET" | "POST";
@@ -201,24 +194,6 @@ function operationIdOf(value: unknown): string {
     : "";
 }
 
-function isMessageOperationId(value: unknown): value is PrivateOperationId {
-  return typeof value === "string" && MESSAGE_OPERATION_IDS.has(value as PrivateOperationId);
-}
-
-function coreSurfaceResult(result: OrbitPublicApiResult): OrbitPublicApiResult {
-  const filtered: OrbitPublicApiResult = { ...result };
-  if (Array.isArray(result.capabilities)) {
-    filtered.capabilities = result.capabilities.filter((operation) => !isMessageOperationId(operationIdOf(operation)));
-  }
-  if (Array.isArray(result.operations)) {
-    const operations = result.operations.filter((operation) => !isMessageOperationId(operationIdOf(operation)));
-    filtered.operations = operations;
-    filtered.operationCount = operations.length;
-  }
-  delete filtered.inboxAction;
-  return filtered;
-}
-
 function visiblePrivateOperations(_scopes: readonly OrbitGrantScope[]): PrivateOperation[] {
   return [...PRIVATE_OPERATIONS];
 }
@@ -234,6 +209,7 @@ function privateOperationDescription(operation: PrivateOperation): Record<string
     readOnly: operation.readOnly,
     authentication: "Active Orbit OAuth grant with live agent revalidation",
     authorizationMode: "full_access",
+    tool: operation.readOnly ? "orbit_read" : "orbit_action",
     pathParameters: operation.pathParameters,
     queryParameters: operation.queryParameters,
     requestBody: operation.bodySchema,
@@ -502,48 +478,31 @@ export class OrbitAgentApi {
     this.#props = props;
   }
 
-  async runCore(input: OrbitAgentApiInput): Promise<OrbitPublicApiResult> {
-    if (input.action === "inbox") throw new Error("The core Orbit API does not expose inbox operations");
-    if (isMessageOperationId(input.operationId)) {
-      throw new Error("Use the dedicated Orbit messaging tool for this operation");
+  async runRead(input: OrbitAgentApiInput): Promise<OrbitPublicApiResult> {
+    const action = input.action ?? "call";
+    if (action === "call" && input.operationId) {
+      const privateOperation = PRIVATE_OPERATIONS.find(
+        (operation) => operation.operationId === input.operationId,
+      );
+      if (privateOperation && !privateOperation.readOnly) {
+        throw new Error(`Use orbit_action for state-changing operation: ${input.operationId}`);
+      }
     }
-    return coreSurfaceResult(await this.run(input));
+    return this.run(input);
   }
 
-  async readInbox(input: {
-    box: "inbox" | "sent";
-    limit: number;
-    cursor?: string;
-  }): Promise<OrbitPublicApiResult> {
-    return this.run({
-      action: "inbox",
-      query: {
-        box: input.box,
-        limit: input.limit,
-        ...(input.cursor ? { cursor: input.cursor } : {}),
-      },
-    });
-  }
-
-  async sendMessage(input: {
-    recipientHandle: string;
-    bodyMarkdown: string;
-    idempotencyKey: string;
-  }): Promise<OrbitPublicApiResult> {
-    return this.run({
-      action: "call",
-      operationId: "sendDirectMessage",
-      body: { recipientHandle: input.recipientHandle, bodyMarkdown: input.bodyMarkdown },
-      idempotencyKey: input.idempotencyKey,
-    });
-  }
-
-  async markMessageRead(input: { messageId: string }): Promise<OrbitPublicApiResult> {
-    return this.run({
-      action: "call",
-      operationId: "markDirectMessageRead",
-      pathParams: { id: input.messageId },
-    });
+  async runAction(input: Omit<OrbitAgentApiInput, "action" | "refreshContract">): Promise<OrbitPublicApiResult> {
+    if (!input.operationId) throw new Error("operationId is required");
+    const privateOperation = PRIVATE_OPERATIONS.find(
+      (operation) => operation.operationId === input.operationId,
+    );
+    if (!privateOperation) {
+      throw new Error(`Unknown or read-only Orbit action: ${input.operationId}. Use orbit_read to discover the current operation catalog.`);
+    }
+    if (privateOperation.readOnly) {
+      throw new Error(`Use orbit_read for read-only operation: ${input.operationId}`);
+    }
+    return this.run({ ...input, action: "call" });
   }
 
   async run(input: OrbitAgentApiInput): Promise<OrbitPublicApiResult> {
@@ -603,7 +562,11 @@ export class OrbitAgentApi {
         action: "list",
         refreshContract: input.refreshContract,
       });
-      const publicOperations = Array.isArray(publicResult.operations) ? publicResult.operations : [];
+      const publicOperations = Array.isArray(publicResult.operations)
+        ? publicResult.operations.map((operation) => (
+            isPlainObject(operation) ? { ...operation, tool: "orbit_read" } : operation
+          ))
+        : [];
       const privateOperations = visibleOperations.map((operation) => ({
         ...privateOperationDescription(operation),
         action: "call",
@@ -786,12 +749,13 @@ export class OrbitAgentApi {
       };
     }
 
-    return this.#publicApi.run({
+    const publicResult = await this.#publicApi.run({
       action,
       operationId: input.operationId,
       pathParams: input.pathParams,
       query: input.query,
       refreshContract: input.refreshContract,
     });
+    return action === "describe" ? { ...publicResult, tool: "orbit_read" } : publicResult;
   }
 }

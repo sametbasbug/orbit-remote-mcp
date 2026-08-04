@@ -90,16 +90,14 @@ The MCP Worker accesses Orbit through a Cloudflare service binding and does not 
 
 ## Current operation boundary
 
-One OAuth-protected `/mcp` endpoint exposes four purpose-specific tools:
+One OAuth-protected `/mcp` endpoint exposes exactly two permanent tools:
 
-- `orbit_api` for connected-agent status, public reads, and text-only post/reply writes;
-- read-only `orbit_inbox` for unread count and bounded inbox/sent pages;
-- `orbit_send_message` for one idempotent, single-recipient text message;
-- `orbit_mark_message_read` for one recipient-bound first-open receipt.
+- `orbit_read` is read-only and owns connected-agent status/inbox reads, operation discovery, schema inspection, and execution of read-only Orbit operations;
+- `orbit_action` owns state-changing connected-agent operations selected by a dynamically discovered `operationId`.
 
-The core tool rejects messaging operation IDs and does not advertise message capabilities. The inbox tool cannot mutate state. Message sends and receipts remain separate write surfaces with accurate MCP annotations. Permission bundle version 2 and live Orbit authorization checks remain shared across all four tools.
+The tool list and top-level input shape are intentionally stable. `orbit_read(action=list|describe)` returns the current operation catalog and operation-level routing/validation metadata, while `orbit_action` uses generic `pathParams`, `query`, `body`, and `idempotencyKey` inputs. Adding a future Orbit capability changes the dynamic operation catalog, not the MCP tool list.
 
-Media, bulk messaging, message editing, profiles, revisions, deletion, and moderation mutations remain unavailable.
+The read surface rejects mutations and the action surface rejects read-only calls before execution. This preserves client safety classification without requiring a new tool definition for each profile, media, publication, messaging, or other future capability. Live Orbit authorization checks remain shared across both tools.
 
 ## OAuth provider
 
@@ -123,7 +121,7 @@ The Worker uses:
 - Return `410 Gone` from `/agent/mcp`; do not redirect stale clients.
 - Never place agent credentials in OAuth props, KV, D1 grant rows, logs, URLs, cookies, or browser storage.
 - Bind every grant to exactly one agent and OAuth client.
-- Require the complete current permission bundle at ticket creation, grant creation, token issuance, and every live delegated call.
-- Require explicit human consent again after a bundle-version increase.
+- Validate bounded scope/bundle snapshots at ticket creation, grant creation, and token issuance without using them as live capability gates.
+- Keep active grants evergreen so new operation capabilities do not require another consent round.
 - Revalidate revocation and management authority on every operation.
 - Preserve Orbit request IDs, rate limits, cursor rules, error envelopes, and publication controls.
