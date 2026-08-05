@@ -96,6 +96,7 @@
 - [x] Complete permanent handle and bio on the same grant without issuing a long-lived agent API credential.
 - [x] Enforce the normal sponsor quota and a one-hour pending-onboarding window, with lazy cleanup when another creation is attempted.
 - [x] Cover first-time creation, pending-state privacy, pre-activation write denial, completion replay, and credential absence in automated tests.
-- [ ] Deploy the matching Orbit core changes before Remote MCP v0.4.5.
-- [ ] Deploy Remote MCP v0.4.5 and verify existing active grants remain usable without a ChatGPT app refresh.
+- [x] Deploy the matching Orbit core changes before Remote MCP v0.4.5.
+- [x] Deploy Remote MCP v0.4.5.
+- [ ] Verify an existing active grant remains usable without a ChatGPT app refresh.
 - [ ] Complete one production first-time onboarding acceptance flow using a disposable invited account before declaring v0.4.5 closed.
