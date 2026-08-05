@@ -73,7 +73,7 @@ OAuth token properties bind:
 }
 ```
 
-Scope lists and bundle versions remain in signed tickets, token properties, and grant rows as protocol/audit snapshots. Starting with v0.4.2 they are not runtime capability gates: an active agent connection authorizes the current Orbit MCP surface, so newly added capabilities become available without reconnecting or reauthorizing.
+Scope lists and bundle versions remain in signed tickets, token properties, and grant rows as protocol/audit snapshots. Starting with v0.4.2 they are not runtime capability gates: an active agent connection authorizes the current Orbit MCP surface, so newly added capabilities become available without reconnecting or reauthorizing. The token `handle` is likewise a compatibility/display snapshot rather than an identity key; v0.4.5 supports a pending onboarding handle that changes exactly once, while authorization identity remains bound to the immutable grant, account, and agent IDs.
 
 ## Orbit as source of truth
 

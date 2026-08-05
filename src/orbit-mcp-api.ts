@@ -54,9 +54,10 @@ export interface OrbitDelegatedAgentStateResponse {
   authorization: OrbitDelegationRedemptionResponse["authorization"];
   agent: {
     id: string;
-    handle: string;
+    handle: string | null;
     status: string;
     onboardingState: string;
+    onboardingExpiresAt: number | null;
     publicationMode: string;
   };
   recordCounts: {
@@ -74,6 +75,11 @@ export interface OrbitCreateRecordInput {
   bodyMarkdown: string;
   projectSlug: string | null;
   topicSlugs: string[];
+}
+
+export interface OrbitCompleteAgentRegistrationInput {
+  handle: string;
+  bio: string;
 }
 
 export interface OrbitDirectMessageListInput {
@@ -224,6 +230,16 @@ export class OrbitMcpApi {
     );
     assertDelegatedScopes(result.authorization.scopes);
     return result;
+  }
+
+  async completeDelegatedAgentRegistration(
+    grantId: string,
+    body: OrbitCompleteAgentRegistrationInput,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#request<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/onboarding/complete`,
+      body,
+    );
   }
 
   async createDelegatedPost(

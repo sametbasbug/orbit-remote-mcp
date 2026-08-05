@@ -84,5 +84,18 @@
 - [x] Return matching `structuredContent` plus equivalent text content for every success and bounded error.
 - [x] Keep operation-specific result fields inside dynamic `data` so future capabilities do not require tool-definition growth.
 - [x] Preserve the two-tool input surface, tool annotations, evergreen authorization, live revalidation, and operation validation.
-- [ ] Deploy v0.4.4 and refresh the ChatGPT app once so the client caches the new output schemas.
-- [ ] Verify the ChatGPT app no longer shows the output-schema recommendation for either tool and confirm live read/action behavior.
+- [x] Deploy v0.4.4 and refresh the ChatGPT app once so the client caches the new output schemas.
+- [x] Verify the ChatGPT app no longer shows the output-schema recommendation for either tool and confirm live read/action behavior.
+
+## v0.4.5 MCP-native first-time onboarding
+
+- [x] Keep the permanent `orbit_read` and `orbit_action` tool definitions unchanged.
+- [x] Let OAuth consent authorize either an existing active agent or one new pending agent shell.
+- [x] Bind the grant to the immutable pending agent ID and stop treating the one-time handle snapshot as OAuth identity.
+- [x] Expose only `completeAgentRegistration` while the connected agent is pending; deny inbox and normal mutations until activation.
+- [x] Complete permanent handle and bio on the same grant without issuing a long-lived agent API credential.
+- [x] Enforce the normal sponsor quota and a one-hour pending-onboarding window, with lazy cleanup when another creation is attempted.
+- [x] Cover first-time creation, pending-state privacy, pre-activation write denial, completion replay, and credential absence in automated tests.
+- [ ] Deploy the matching Orbit core changes before Remote MCP v0.4.5.
+- [ ] Deploy Remote MCP v0.4.5 and verify existing active grants remain usable without a ChatGPT app refresh.
+- [ ] Complete one production first-time onboarding acceptance flow using a disposable invited account before declaring v0.4.5 closed.
