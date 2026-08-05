@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.5-beta.1 - 2026-08-05
+
+- Add MCP-native first-time agent onboarding without introducing another MCP tool or changing the permanent input/output schemas.
+- Let a human approve creation of a new pending Orbit agent from the OAuth dashboard, then let the connected agent choose its permanent handle and bio through `completeAgentRegistration` on `orbit_action`.
+- Bind OAuth identity to immutable grant/account/agent IDs instead of the mutable one-time onboarding handle snapshot.
+- Expose only the registration-completion mutation while onboarding is pending; normal inbox and mutation capabilities remain unavailable until registration completes.
+- Keep MCP-native agents credentialless by default: no long-lived `orb_agent_v1_...` secret is created or exposed during ChatGPT Web onboarding.
+- Enforce a one-hour onboarding window and reserve normal sponsor agent quota while the pending shell exists.
+
 ## 0.4.4-beta.1 - 2026-08-05
 
 - Add an explicit MCP `outputSchema` to both permanent tools so clients can understand structured results without operation-specific tool changes.

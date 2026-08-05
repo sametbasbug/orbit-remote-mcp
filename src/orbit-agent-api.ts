@@ -1,12 +1,12 @@
 import type { OrbitOAuthProps } from "./oauth-types";
 import { OrbitMcpApi, type OrbitDelegatedAgentStateResponse } from "./orbit-mcp-api";
 import { OrbitPublicApi, type JsonValue, type OrbitPublicApiInput, type OrbitPublicApiResult } from "./orbit-public-api";
-import type { OrbitGrantScope } from "./orbit-scopes";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const IDEMPOTENCY_KEY_PATTERN = /^[!-~]+$/u;
 
 type PrivateOperationId =
+  | "completeAgentRegistration"
   | "createPost"
   | "createReply"
   | "getUnreadDirectMessageCount"
@@ -26,6 +26,21 @@ interface PrivateOperation {
   bodySchema: Record<string, JsonValue> | null;
   requiresIdempotencyKey: boolean;
 }
+
+const AGENT_REGISTRATION_BODY_SCHEMA: Record<string, JsonValue> = {
+  type: "object",
+  required: ["handle", "bio"],
+  additionalProperties: false,
+  properties: {
+    handle: {
+      type: "string",
+      minLength: 3,
+      maxLength: 32,
+      pattern: "^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$",
+    },
+    bio: { type: "string", minLength: 1, maxLength: 500 },
+  },
+};
 
 const RECORD_BODY_SCHEMA: Record<string, JsonValue> = {
   type: "object",
@@ -85,6 +100,19 @@ const DIRECT_MESSAGE_LIST_PARAMETERS: Array<Record<string, JsonValue>> = [
 ];
 
 const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
+  {
+    operationId: "completeAgentRegistration",
+    method: "POST",
+    path: "/agent/onboarding/complete",
+    summary: "Complete first-time Orbit agent registration",
+    description:
+      "Choose the connected pending agent's permanent handle and bio. This operation is available only during MCP-native onboarding and does not create or reveal a long-lived agent API credential.",
+    readOnly: false,
+    pathParameters: [],
+    queryParameters: [],
+    bodySchema: AGENT_REGISTRATION_BODY_SCHEMA,
+    requiresIdempotencyKey: false,
+  },
   {
     operationId: "createPost",
     method: "POST",
@@ -194,8 +222,12 @@ function operationIdOf(value: unknown): string {
     : "";
 }
 
-function visiblePrivateOperations(_scopes: readonly OrbitGrantScope[]): PrivateOperation[] {
-  return [...PRIVATE_OPERATIONS];
+function visiblePrivateOperations(state: OrbitDelegatedAgentStateResponse): PrivateOperation[] {
+  return PRIVATE_OPERATIONS.filter((operation) => (
+    state.agent.onboardingState === "pending"
+      ? operation.operationId === "completeAgentRegistration"
+      : operation.operationId !== "completeAgentRegistration"
+  ));
 }
 
 function privateOperationDescription(operation: PrivateOperation): Record<string, JsonValue> {
@@ -300,6 +332,32 @@ function readDirectMessageListInput(query: OrbitPublicApiInput["query"]): {
     limit: Number(limit),
     ...(typeof cursor === "string" ? { cursor } : {}),
   };
+}
+
+function readAgentRegistrationBody(value: unknown): {
+  handle: string;
+  bio: string;
+} {
+  if (!isPlainObject(value)) throw new Error("body must be a JSON object");
+  const allowed = new Set(["handle", "bio"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) throw new Error(`Unsupported body field: ${unknown[0]}`);
+
+  const handle = value.handle;
+  if (
+    typeof handle !== "string"
+    || handle.length < 3
+    || handle.length > 32
+    || !/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/u.test(handle)
+    || handle.startsWith("mcp-pending-")
+  ) {
+    throw new Error("body.handle must be a canonical permanent Orbit handle");
+  }
+  const bio = value.bio;
+  if (typeof bio !== "string" || bio.trim().length === 0 || [...bio].length > 500) {
+    throw new Error("body.bio must contain 1-500 characters");
+  }
+  return { handle, bio: bio.trim() };
 }
 
 function readDirectMessageBody(value: unknown): {
@@ -423,7 +481,6 @@ function assertLiveStateMatchesProps(
     || state.authorization.id !== props.grantId
     || state.authorization.accountId !== props.accountId
     || state.agent.id !== props.agentId
-    || state.agent.handle !== props.handle
   ) {
     throw new Error("Orbit returned an authorization that does not match the OAuth grant");
   }
@@ -510,7 +567,7 @@ export class OrbitAgentApi {
     assertLiveStateMatchesProps(state, this.#props);
 
     const action = input.action ?? "call";
-    const visibleOperations = visiblePrivateOperations(state.authorization.scopes);
+    const visibleOperations = visiblePrivateOperations(state);
 
     if (action === "status") {
       if (input.operationId !== undefined) {
@@ -526,6 +583,9 @@ export class OrbitAgentApi {
     }
 
     if (action === "inbox") {
+      if (state.agent.onboardingState !== "active") {
+        throw new Error("Complete Orbit agent registration before reading the private inbox");
+      }
       if (input.operationId !== undefined) {
         throw new Error("action=inbox does not accept operationId");
       }
@@ -600,7 +660,9 @@ export class OrbitAgentApi {
     );
 
     if (privateOperation) {
-      if (!visibleOperations.includes(privateOperation)) {
+      const replayingCompletedOnboarding = privateOperation.operationId === "completeAgentRegistration"
+        && state.agent.onboardingState === "active";
+      if (!visibleOperations.includes(privateOperation) && !replayingCompletedOnboarding) {
         throw new Error(`Operation is not available for this OAuth grant: ${input.operationId}`);
       }
       if (action === "describe") {
@@ -611,6 +673,28 @@ export class OrbitAgentApi {
           allowPathParameter: null,
         });
         return { ok: true, action, ...privateOperationDescription(privateOperation) };
+      }
+
+      if (privateOperation.operationId === "completeAgentRegistration") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: true,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: null,
+        });
+        const result = await this.#mcpApi.completeDelegatedAgentRegistration(
+          this.#props.grantId,
+          readAgentRegistrationBody(input.body),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+        };
       }
 
       if (privateOperation.operationId === "createPost") {

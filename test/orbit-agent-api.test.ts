@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { OrbitAgentApi } from "../src/orbit-agent-api";
-import { OrbitMcpApi } from "../src/orbit-mcp-api";
+import { OrbitMcpApi, type OrbitDelegatedAgentStateResponse } from "../src/orbit-mcp-api";
 import { OrbitPublicApi, ORBIT_API_BASE, ORBIT_OPENAPI_URL } from "../src/orbit-public-api";
 import type { OrbitOAuthProps } from "../src/oauth-types";
 import type { OrbitGrantScope } from "../src/orbit-scopes";
@@ -61,7 +61,7 @@ function props(scopes: OrbitGrantScope[]): OrbitOAuthProps {
   };
 }
 
-function state(scopes: OrbitGrantScope[]) {
+function state(scopes: OrbitGrantScope[]): OrbitDelegatedAgentStateResponse {
   return {
     authorization: {
       id: "grant-1",
@@ -84,6 +84,7 @@ function state(scopes: OrbitGrantScope[]) {
       handle: "selene",
       status: "active",
       onboardingState: "active",
+      onboardingExpiresAt: null,
       publicationMode: "direct_publish",
     },
     recordCounts: {
@@ -537,4 +538,78 @@ test("rejects live identity drift from token-bound OAuth props", async () => {
     () => api.run({ action: "list" }),
     /does not match the OAuth grant/u,
   );
+});
+
+test("completes MCP-native onboarding without changing the permanent tool surface", async () => {
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  let completed = false;
+  const calls: Request[] = [];
+  const api = new OrbitAgentApi(
+    publicApi(),
+    new OrbitMcpApi({
+      ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
+      ORBIT_SERVICE: service(async (request) => {
+        calls.push(request);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/agent/state")) {
+          const current = state(scopes);
+          current.agent.handle = completed ? "nova" : null;
+          current.agent.onboardingState = completed ? "active" : "pending";
+          current.agent.onboardingExpiresAt = completed ? null : 99_999;
+          current.authorization.agent.handle = completed ? "nova" : "mcp-pending-internal";
+          return jsonResponse(current);
+        }
+        if (path.endsWith("/agent/onboarding/complete")) {
+          assert.deepEqual(await request.clone().json(), { handle: "nova", bio: "Orbit'te yeni bir ajan." });
+          completed = true;
+          return jsonResponse({
+            authorization: { ...state(scopes).authorization, agent: { id: "agent-1", handle: "nova" } },
+            agent: {
+              handle: "nova",
+              status: "active",
+              onboardingState: "active",
+              publicationMode: "approval_required",
+            },
+          });
+        }
+        return jsonResponse({ error: { code: "not_found", message: "Not found" } }, { status: 404 });
+      }),
+    }),
+    { ...props(scopes), handle: "mcp-pending-token-snapshot" },
+  );
+
+  const pending = await api.runRead({ action: "status" });
+  assert.equal((pending.connectedAgent as { handle: string | null }).handle, null);
+  assert.deepEqual(
+    (pending.capabilities as Array<{ operationId: string }>).map((operation) => operation.operationId),
+    ["completeAgentRegistration"],
+  );
+  await assert.rejects(
+    () => api.runRead({ action: "inbox" }),
+    /Complete Orbit agent registration/u,
+  );
+  await assert.rejects(
+    () => api.runAction({
+      operationId: "createPost",
+      body: { bodyMarkdown: "Too early" },
+      idempotencyKey: "too-early",
+    }),
+    /Operation is not available/u,
+  );
+
+  const completion = await api.runAction({
+    operationId: "completeAgentRegistration",
+    body: { handle: "nova", bio: "Orbit'te yeni bir ajan." },
+  });
+  assert.equal(completion.status, 200);
+  assert.equal(completed, true);
+
+  const active = await api.runRead({ action: "status" });
+  assert.equal((active.connectedAgent as { handle: string | null }).handle, "nova");
+  assert.ok(
+    (active.capabilities as Array<{ operationId: string }>).every(
+      (operation) => operation.operationId !== "completeAgentRegistration",
+    ),
+  );
+  assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/onboarding/complete")));
 });
