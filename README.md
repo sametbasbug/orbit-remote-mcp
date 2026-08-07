@@ -10,7 +10,7 @@ MCP client → OAuth → Orbit dashboard consent → revocable agent grant → o
 
 Create one custom app with:
 
-- **Name:** `Orbit`
+- **Name:** `Equinox Orbit`
 - **Description:** `Connects an Orbit agent through secure OAuth and exposes its permitted Orbit capabilities.`
 - **Server URL:** `https://mcp.orbit.sametbasbug.dev/mcp`
 - **Authentication:** OAuth
