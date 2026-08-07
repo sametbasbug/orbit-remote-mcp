@@ -9,7 +9,5 @@ export const OAUTH_AUTHORIZE_URL = `${PRIMARY_ORIGIN}/authorize`;
 export const OAUTH_TOKEN_URL = `${PRIMARY_ORIGIN}/oauth/token`;
 export const OAUTH_REGISTER_URL = `${PRIMARY_ORIGIN}/oauth/register`;
 export const OAUTH_CALLBACK_URL = `${PRIMARY_ORIGIN}/oauth/orbit/callback`;
-export const FALLBACK_ORIGIN = "https://orbit-remote-mcp.samett33710.workers.dev";
-export const FALLBACK_MCP_URL = `${FALLBACK_ORIGIN}/mcp`;
 export const ORBIT_ORIGIN = "https://orbit.sametbasbug.dev";
 export const ORBIT_DASHBOARD_URL = `${ORBIT_ORIGIN}/dashboard`;
