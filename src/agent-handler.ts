@@ -138,7 +138,6 @@ export const agentMcpHandler = {
       route: "/mcp",
       allowedHostnames: [
         "mcp.orbit.sametbasbug.dev",
-        "orbit-remote-mcp.samett33710.workers.dev",
         "localhost",
         "127.0.0.1",
       ],

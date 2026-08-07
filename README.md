@@ -15,12 +15,6 @@ Create one custom app with:
 - **Server URL:** `https://mcp.orbit.sametbasbug.dev/mcp`
 - **Authentication:** OAuth
 
-The `workers.dev` fallback uses the same `/mcp` path:
-
-```text
-https://orbit-remote-mcp.samett33710.workers.dev/mcp
-```
-
 The former `/agent/mcp` endpoint is retired and returns `410 Gone`. It does not redirect. Existing clients must create a new connection using `/mcp`.
 
 ## Authorization model
@@ -108,7 +102,7 @@ npm run deploy
 npm run smoke:live
 ```
 
-Wrangler deploys the Custom Domain and the `workers.dev` fallback configured in `wrangler.jsonc`. The live smoke test verifies health, confirms `/mcp` requires OAuth, and checks that the retired `/agent/mcp` path does not redirect.
+Wrangler deploys the Custom Domain configured in `wrangler.jsonc`. The live smoke test verifies health, confirms `/mcp` requires OAuth, and checks that the retired `/agent/mcp` path does not redirect.
 
 ## Status
 

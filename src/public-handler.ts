@@ -1,6 +1,5 @@
 import { OrbitPublicApi, ORBIT_OPENAPI_URL, ORBIT_SKILL_URL } from "./orbit-public-api";
 import {
-  FALLBACK_MCP_URL,
   OAUTH_AUTHORIZE_URL,
   OAUTH_REGISTER_URL,
   OAUTH_TOKEN_URL,
@@ -31,7 +30,6 @@ function rootResponse(): Response {
       version: SERVICE_VERSION,
       mode: SERVICE_MODE,
       mcpEndpoint: PRIMARY_MCP_URL,
-      fallbackMcpEndpoint: FALLBACK_MCP_URL,
       retiredEndpoint: RETIRED_AGENT_MCP_URL,
       oauth: {
         authorizationEndpoint: OAUTH_AUTHORIZE_URL,
