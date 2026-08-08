@@ -113,6 +113,25 @@ export interface OrbitAvatarUploadSessionResponse {
   };
 }
 
+export interface OrbitOwnRecordListInput {
+  limit?: number;
+  cursor?: string;
+  state?: "pending" | "published" | "rejected" | "deleted";
+  kind?: "post" | "reply";
+  reviewStatus?: "pending" | "approved" | "rejected" | "cancelled";
+}
+
+export interface OrbitAnnouncementListInput {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface OrbitFollowListInput {
+  box?: "following" | "followers";
+  limit?: number;
+  cursor?: string;
+}
+
 export interface OrbitDirectMessageListInput {
   box: "inbox" | "sent";
   limit: number;
@@ -322,6 +341,104 @@ export class OrbitMcpApi {
       `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/replies`,
       { ...body, mediaId: null },
       assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
+  async listDelegatedOwnRecords(grantId: string, input: OrbitOwnRecordListInput): Promise<unknown> {
+    return this.#post<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/records`,
+      input,
+    );
+  }
+
+  async getDelegatedOwnRecord(grantId: string, record: string): Promise<unknown> {
+    return this.#post<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/records/${encodeURIComponent(record)}`,
+      {},
+    );
+  }
+
+  async reviseDelegatedRecord(
+    grantId: string,
+    record: string,
+    bodyMarkdown: string,
+    idempotencyKey: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#postResult(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/revise`,
+      { bodyMarkdown, mediaId: null },
+      assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
+  async withdrawDelegatedRecord(
+    grantId: string,
+    record: string,
+    idempotencyKey: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#postResult(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/withdraw`,
+      {},
+      assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
+  async deleteDelegatedRecord(
+    grantId: string,
+    record: string,
+    reason: string | undefined,
+    idempotencyKey: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#postResult(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/delete`,
+      reason === undefined ? {} : { reason },
+      assertIdempotencyKey(idempotencyKey),
+    );
+  }
+
+  async getDelegatedUnreadAnnouncementCount(grantId: string): Promise<unknown> {
+    return this.#post<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/announcements/unread-count`,
+      {},
+    );
+  }
+
+  async listDelegatedAnnouncements(grantId: string, input: OrbitAnnouncementListInput): Promise<unknown> {
+    return this.#post<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/announcements/list`,
+      input,
+    );
+  }
+
+  async markDelegatedAnnouncementRead(grantId: string, announcementId: string): Promise<OrbitMcpMutationResult> {
+    return this.#request<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/announcements/${encodeURIComponent(announcementId)}/read`,
+      {},
+    );
+  }
+
+  async setDelegatedFollow(
+    grantId: string,
+    handle: string,
+    following: boolean,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#request<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/follows/${encodeURIComponent(handle)}/${following ? "follow" : "unfollow"}`,
+      {},
+    );
+  }
+
+  async listDelegatedFollows(grantId: string, input: OrbitFollowListInput): Promise<unknown> {
+    return this.#post<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/follows/list`,
+      input,
+    );
+  }
+
+  async listDelegatedFollowingFeed(grantId: string, input: OrbitAnnouncementListInput): Promise<unknown> {
+    return this.#post<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/feed/following`,
+      input,
     );
   }
 
