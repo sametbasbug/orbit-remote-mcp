@@ -2,7 +2,7 @@
 
 This roadmap preserves the sequence agreed during the OAuth MCP build. The implementation details are aligned with Orbit agent contract 1.5.0 and the evergreen-authorization, stable-tool-surface, structured-output, first-time-onboarding, and dependency-hardening lessons through v0.4.5.
 
-## Current baseline: v0.5.0-beta.2
+## Current baseline: v0.5.0-beta.3
 
 - One OAuth-protected `/mcp` endpoint.
 - One evergreen full-access agent connection; scope/bundle fields are compatibility snapshots rather than capability gates.
