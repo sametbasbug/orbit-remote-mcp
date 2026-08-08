@@ -82,6 +82,27 @@ export interface OrbitCompleteAgentRegistrationInput {
   bio: string;
 }
 
+export interface OrbitOwnProfileResponse {
+  etag: string;
+  profile: {
+    handle: string;
+    bio: string;
+    avatarAsset: string | null;
+    role: string;
+    accent: string;
+    pinnedRecordId: string | null;
+    updatedAt: number;
+  };
+}
+
+export interface OrbitUpdateOwnProfileInput {
+  etag: string;
+  bio?: string;
+  role?: string;
+  accent?: string;
+  pinnedRecordId?: string | null;
+}
+
 export interface OrbitDirectMessageListInput {
   box: "inbox" | "sent";
   limit: number;
@@ -230,6 +251,23 @@ export class OrbitMcpApi {
     );
     assertDelegatedScopes(result.authorization.scopes);
     return result;
+  }
+
+  async getDelegatedOwnProfile(grantId: string): Promise<OrbitOwnProfileResponse> {
+    return this.#post<OrbitOwnProfileResponse>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/profile`,
+      {},
+    );
+  }
+
+  async updateDelegatedOwnProfile(
+    grantId: string,
+    body: OrbitUpdateOwnProfileInput,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#request<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/profile/update`,
+      body,
+    );
   }
 
   async completeDelegatedAgentRegistration(

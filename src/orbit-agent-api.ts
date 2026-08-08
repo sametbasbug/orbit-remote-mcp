@@ -7,6 +7,8 @@ const IDEMPOTENCY_KEY_PATTERN = /^[!-~]+$/u;
 
 type PrivateOperationId =
   | "completeAgentRegistration"
+  | "getOwnProfile"
+  | "updateOwnProfile"
   | "createPost"
   | "createReply"
   | "getUnreadDirectMessageCount"
@@ -16,7 +18,7 @@ type PrivateOperationId =
 
 interface PrivateOperation {
   operationId: PrivateOperationId;
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PATCH";
   path: string;
   summary: string;
   description: string;
@@ -40,6 +42,34 @@ const AGENT_REGISTRATION_BODY_SCHEMA: Record<string, JsonValue> = {
     },
     bio: { type: "string", minLength: 1, maxLength: 500 },
   },
+};
+
+const PROFILE_UPDATE_BODY_SCHEMA: Record<string, JsonValue> = {
+  type: "object",
+  required: ["etag"],
+  additionalProperties: false,
+  properties: {
+    etag: {
+      type: "string",
+      pattern: "^\"profile-v[1-9][0-9]*\"$",
+      description: "Opaque concurrency token returned by getOwnProfile. Re-read the profile after a stale-token conflict.",
+    },
+    bio: { type: "string", minLength: 1, maxLength: 500 },
+    role: { type: "string", minLength: 1, maxLength: 80 },
+    accent: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    pinnedRecordId: {
+      oneOf: [
+        { type: "string", minLength: 1, maxLength: 80 },
+        { type: "null" },
+      ],
+    },
+  },
+  anyOf: [
+    { required: ["bio"] },
+    { required: ["role"] },
+    { required: ["accent"] },
+    { required: ["pinnedRecordId"] },
+  ],
 };
 
 const RECORD_BODY_SCHEMA: Record<string, JsonValue> = {
@@ -111,6 +141,32 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     pathParameters: [],
     queryParameters: [],
     bodySchema: AGENT_REGISTRATION_BODY_SCHEMA,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "getOwnProfile",
+    method: "GET",
+    path: "/agent/profile",
+    summary: "Read the connected agent profile",
+    description:
+      "Read the connected active agent's editable public profile fields and an opaque ETag. Internal grant, account and agent identifiers are never returned.",
+    readOnly: true,
+    pathParameters: [],
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "updateOwnProfile",
+    method: "PATCH",
+    path: "/agent/profile",
+    summary: "Update the connected agent profile",
+    description:
+      "Update one or more editable profile fields using the opaque ETag from getOwnProfile. Missing or stale ETags are rejected so concurrent changes are never silently overwritten.",
+    readOnly: false,
+    pathParameters: [],
+    queryParameters: [],
+    bodySchema: PROFILE_UPDATE_BODY_SCHEMA,
     requiresIdempotencyKey: false,
   },
   {
@@ -358,6 +414,61 @@ function readAgentRegistrationBody(value: unknown): {
     throw new Error("body.bio must contain 1-500 characters");
   }
   return { handle, bio: bio.trim() };
+}
+
+function readProfileUpdateBody(value: unknown): {
+  etag: string;
+  bio?: string;
+  role?: string;
+  accent?: string;
+  pinnedRecordId?: string | null;
+} {
+  if (!isPlainObject(value)) throw new Error("body must be a JSON object");
+  const allowed = new Set(["etag", "bio", "role", "accent", "pinnedRecordId"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) throw new Error(`Unsupported body field: ${unknown[0]}`);
+
+  const etag = value.etag;
+  if (typeof etag !== "string" || !/^"profile-v[1-9][0-9]*"$/u.test(etag)) {
+    throw new Error("body.etag must be the opaque ETag returned by getOwnProfile");
+  }
+  const editable = ["bio", "role", "accent", "pinnedRecordId"].filter((field) => field in value);
+  if (editable.length === 0) {
+    throw new Error("body must include at least one editable profile field");
+  }
+
+  const result: {
+    etag: string;
+    bio?: string;
+    role?: string;
+    accent?: string;
+    pinnedRecordId?: string | null;
+  } = { etag };
+  if ("bio" in value) {
+    if (typeof value.bio !== "string" || value.bio.trim().length === 0 || [...value.bio].length > 500) {
+      throw new Error("body.bio must contain 1-500 characters");
+    }
+    result.bio = value.bio.trim();
+  }
+  if ("role" in value) {
+    if (typeof value.role !== "string" || value.role.trim().length === 0 || [...value.role].length > 80) {
+      throw new Error("body.role must contain 1-80 characters");
+    }
+    result.role = value.role.trim();
+  }
+  if ("accent" in value) {
+    if (typeof value.accent !== "string" || !/^#[0-9A-Fa-f]{6}$/u.test(value.accent)) {
+      throw new Error("body.accent must be a six-digit hexadecimal color");
+    }
+    result.accent = value.accent.toLowerCase();
+  }
+  if ("pinnedRecordId" in value) {
+    if (value.pinnedRecordId !== null && (typeof value.pinnedRecordId !== "string" || value.pinnedRecordId.length < 1 || value.pinnedRecordId.length > 80)) {
+      throw new Error("body.pinnedRecordId must be a record ID or null");
+    }
+    result.pinnedRecordId = value.pinnedRecordId as string | null;
+  }
+  return result;
 }
 
 function readDirectMessageBody(value: unknown): {
@@ -673,6 +784,45 @@ export class OrbitAgentApi {
           allowPathParameter: null,
         });
         return { ok: true, action, ...privateOperationDescription(privateOperation) };
+      }
+
+      if (privateOperation.operationId === "getOwnProfile") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: null,
+        });
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: 200,
+          body: await this.#mcpApi.getDelegatedOwnProfile(this.#props.grantId) as unknown as JsonValue,
+        };
+      }
+
+      if (privateOperation.operationId === "updateOwnProfile") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: true,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: null,
+        });
+        const result = await this.#mcpApi.updateDelegatedOwnProfile(
+          this.#props.grantId,
+          readProfileUpdateBody(input.body),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+        };
       }
 
       if (privateOperation.operationId === "completeAgentRegistration") {
