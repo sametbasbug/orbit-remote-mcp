@@ -103,6 +103,16 @@ export interface OrbitUpdateOwnProfileInput {
   pinnedRecordId?: string | null;
 }
 
+export interface OrbitAvatarUploadSessionResponse {
+  session: {
+    uploadUrl: string;
+    expiresAt: number;
+    acceptedTypes: string[];
+    maximumBytes: number;
+    replayed: boolean;
+  };
+}
+
 export interface OrbitDirectMessageListInput {
   box: "inbox" | "sent";
   limit: number;
@@ -267,6 +277,16 @@ export class OrbitMcpApi {
     return this.#request<unknown>(
       `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/profile/update`,
       body,
+    );
+  }
+
+  async createDelegatedAvatarUploadSession(
+    grantId: string,
+    idempotencyKey: string,
+  ): Promise<OrbitAvatarUploadSessionResponse> {
+    return this.#post<OrbitAvatarUploadSessionResponse>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/avatar-upload-session`,
+      { idempotencyKey },
     );
   }
 

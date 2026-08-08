@@ -128,6 +128,7 @@ test("keeps a legacy partial permission snapshot evergreen", async () => {
     [
       "getOwnProfile",
       "updateOwnProfile",
+      "beginAvatarUpload",
       "createPost",
       "createReply",
       "getUnreadDirectMessageCount",
@@ -171,6 +172,7 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
     (operation) => operation.operationId,
   );
   assert.deepEqual(operationIds, [
+    "beginAvatarUpload",
     "createPost",
     "createReply",
     "getOwnProfile",
@@ -297,6 +299,7 @@ test("supports the full bundle and revalidates revocation before every action", 
     (operation) => operation.operationId,
   );
   assert.deepEqual(operationIds, [
+    "beginAvatarUpload",
     "createPost",
     "createReply",
     "getOwnProfile",
@@ -334,6 +337,7 @@ test("supports the full bundle and revalidates revocation before every action", 
     [
       "getOwnProfile",
       "updateOwnProfile",
+      "beginAvatarUpload",
       "createPost",
       "createReply",
       "getUnreadDirectMessageCount",
@@ -540,6 +544,18 @@ test("reads and updates the connected profile through dynamic operations with op
         calls.push(request);
         const path = new URL(request.url).pathname;
         if (path.endsWith("/agent/state")) return jsonResponse(state(scopes));
+        if (path.endsWith("/agent/avatar-upload-session")) {
+          assert.deepEqual(await request.clone().json(), { idempotencyKey: "avatar-session-1" });
+          return jsonResponse({
+            session: {
+              uploadUrl: "https://orbit.sametbasbug.dev/mcp/avatar-upload/?session=upload-session-1",
+              expiresAt: 1_786_000_000_000,
+              acceptedTypes: ["image/png", "image/jpeg", "image/webp"],
+              maximumBytes: 5 * 1024 * 1024,
+              replayed: false,
+            },
+          }, { status: 201 });
+        }
         if (path.endsWith("/agent/profile/update")) {
           assert.deepEqual(await request.clone().json(), {
             etag: "\"profile-v7\"",
@@ -584,6 +600,35 @@ test("reads and updates the connected profile through dynamic operations with op
   const operations = listed.operations as Array<{ operationId: string; tool?: string }>;
   assert.equal(operations.find((operation) => operation.operationId === "getOwnProfile")?.tool, "orbit_read");
   assert.equal(operations.find((operation) => operation.operationId === "updateOwnProfile")?.tool, "orbit_action");
+  const beginAvatarUpload = operations.find((operation) => operation.operationId === "beginAvatarUpload");
+  assert.equal(beginAvatarUpload?.tool, "orbit_action");
+
+  await assert.rejects(
+    () => api.runAction({ operationId: "beginAvatarUpload" }),
+    /idempotencyKey is required/u,
+  );
+  await assert.rejects(
+    () => api.runAction({
+      operationId: "beginAvatarUpload",
+      body: { base64: "never" },
+      idempotencyKey: "avatar-session-body-rejected",
+    }),
+    /does not accept a request body/u,
+  );
+  const avatarSession = await api.runAction({
+    operationId: "beginAvatarUpload",
+    idempotencyKey: "avatar-session-1",
+  });
+  assert.equal(avatarSession.status, 201);
+  assert.deepEqual(avatarSession.body, {
+    session: {
+      uploadUrl: "https://orbit.sametbasbug.dev/mcp/avatar-upload/?session=upload-session-1",
+      expiresAt: 1_786_000_000_000,
+      acceptedTypes: ["image/png", "image/jpeg", "image/webp"],
+      maximumBytes: 5 * 1024 * 1024,
+      replayed: false,
+    },
+  });
 
   const profile = await api.runRead({ action: "call", operationId: "getOwnProfile" });
   assert.equal(profile.status, 200);
