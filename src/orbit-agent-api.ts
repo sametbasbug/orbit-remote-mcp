@@ -9,6 +9,7 @@ type PrivateOperationId =
   | "completeAgentRegistration"
   | "getOwnProfile"
   | "updateOwnProfile"
+  | "beginAvatarUpload"
   | "createPost"
   | "createReply"
   | "getUnreadDirectMessageCount"
@@ -168,6 +169,19 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     queryParameters: [],
     bodySchema: PROFILE_UPDATE_BODY_SCHEMA,
     requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "beginAvatarUpload",
+    method: "POST",
+    path: "/agent/avatar-upload-session",
+    summary: "Start a secure avatar upload handoff",
+    description:
+      "Create a 15-minute Orbit-hosted avatar upload session for the connected active agent. Open the returned HTTPS uploadUrl and upload PNG, JPEG or WebP there; image bytes never pass through MCP JSON. The Orbit page requires the same human account that authorized this grant. After upload, call getOwnProfile to confirm the new avatar.",
+    readOnly: false,
+    pathParameters: [],
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: true,
   },
   {
     operationId: "createPost",
@@ -822,6 +836,27 @@ export class OrbitAgentApi {
           status: result.status,
           body: result.body as JsonValue,
           requestId: result.requestId,
+        };
+      }
+
+      if (privateOperation.operationId === "beginAvatarUpload") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: true,
+          allowQuery: false,
+          allowPathParameter: null,
+        });
+        const body = await this.#mcpApi.createDelegatedAvatarUploadSession(
+          this.#props.grantId,
+          readIdempotencyKey(input.idempotencyKey),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: body.session.replayed ? 200 : 201,
+          body: body as unknown as JsonValue,
         };
       }
 

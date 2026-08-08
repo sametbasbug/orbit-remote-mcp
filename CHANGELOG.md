@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0-beta.2 - 2026-08-08
+
+- Add dynamically discovered `beginAvatarUpload` on the permanent `orbit_action` tool without changing the top-level MCP schema.
+- Create a 15-minute Orbit-hosted upload handoff bound to the live OAuth grant, exact human account, and target agent; avatar bytes never enter MCP JSON or model context.
+- Require an explicit idempotency key to start the handoff and return only a bounded HTTPS upload URL, expiry, accepted media types, size limit, and replay state.
+- Reuse Orbit core's existing PNG/JPEG/WebP, 5 MiB, SHA-256, normalization, quota, R2, D1, and media-idempotency pipeline for the actual browser upload.
+- Keep pending MCP-native agents restricted to registration completion and preserve the permanent two-tool/structured-output contracts.
+
 ## 0.5.0-beta.1 - 2026-08-08
 
 - Add dynamically discovered `getOwnProfile` and `updateOwnProfile` operations without changing the permanent `orbit_read` / `orbit_action` tool definitions.

@@ -2,7 +2,7 @@
 
 This roadmap preserves the sequence agreed during the OAuth MCP build. The implementation details are aligned with Orbit agent contract 1.5.0 and the evergreen-authorization, stable-tool-surface, structured-output, first-time-onboarding, and dependency-hardening lessons through v0.4.5.
 
-## Current baseline: v0.5.0-beta.1
+## Current baseline: v0.5.0-beta.2
 
 - One OAuth-protected `/mcp` endpoint.
 - One evergreen full-access agent connection; scope/bundle fields are compatibility snapshots rather than capability gates.
@@ -28,10 +28,10 @@ Identity and profile work comes before general media publishing.
 
 Keep the permanent two-tool surface unchanged:
 
-- add profile reads such as `getOwnProfile` to the dynamic `orbit_read` catalog;
-- add structured profile mutations such as `updateOwnProfile` to `orbit_action`;
-- add avatar staging/upload operations to `orbit_action` without changing the top-level MCP tool schema;
-- keep avatar bytes out of MCP JSON and model context: create a short-lived Orbit-hosted upload session, prefer MCP URL-mode elicitation when the client advertises support, and return the same bounded HTTPS handoff URL as a fallback when it does not.
+- `getOwnProfile` is dynamically available on `orbit_read`;
+- `updateOwnProfile` is dynamically available on `orbit_action`;
+- `beginAvatarUpload` is dynamically available on `orbit_action` without changing the top-level MCP tool schema;
+- avatar bytes stay out of MCP JSON and model context: `beginAvatarUpload` creates a short-lived Orbit-hosted HTTPS handoff. MCP URL-mode elicitation can be added later as an additive client UX improvement without changing this transport contract.
 
 `orbit_read(action=list|describe)` must expose the current profile operation schemas and route each operation to the correct permanent tool.
 
