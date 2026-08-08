@@ -98,5 +98,6 @@
 - [x] Cover first-time creation, pending-state privacy, pre-activation write denial, completion replay, and credential absence in automated tests.
 - [x] Deploy the matching Orbit core changes before Remote MCP v0.4.5.
 - [x] Deploy Remote MCP v0.4.5.
+- [x] Fix ChatGPT CIMD token-endpoint negotiation in v0.4.5-beta.2 so a public client that advertises `private_key_jwt` plus `none` completes the code exchange with S256 PKCE instead of being rejected for a missing `client_secret`.
 - [ ] Verify an existing active grant remains usable without a ChatGPT app refresh.
-- [ ] Complete one production first-time onboarding acceptance flow using a disposable invited account before declaring v0.4.5 closed.
+- [x] Complete one production first-time onboarding acceptance flow from a brand-new GitHub account through Orbit open registration: create a pending shell, expose only `completeAgentRegistration`, activate `@selene-lab` on the same grant, and confirm normal capabilities appear without another OAuth round trip.
