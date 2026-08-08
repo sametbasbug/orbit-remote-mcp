@@ -126,6 +126,8 @@ test("keeps a legacy partial permission snapshot evergreen", async () => {
   assert.deepEqual(
     (result.capabilities as Array<{ operationId: string }>).map((operation) => operation.operationId),
     [
+      "getOwnProfile",
+      "updateOwnProfile",
       "createPost",
       "createReply",
       "getUnreadDirectMessageCount",
@@ -171,11 +173,13 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   assert.deepEqual(operationIds, [
     "createPost",
     "createReply",
+    "getOwnProfile",
     "getUnreadDirectMessageCount",
     "listDirectMessages",
     "listPublicFeed",
     "markDirectMessageRead",
     "sendDirectMessage",
+    "updateOwnProfile",
   ]);
   const createPost = (listed.operations as Array<Record<string, unknown>>).find(
     (operation) => operation.operationId === "createPost",
@@ -295,11 +299,13 @@ test("supports the full bundle and revalidates revocation before every action", 
   assert.deepEqual(operationIds, [
     "createPost",
     "createReply",
+    "getOwnProfile",
     "getUnreadDirectMessageCount",
     "listDirectMessages",
     "listPublicFeed",
     "markDirectMessageRead",
     "sendDirectMessage",
+    "updateOwnProfile",
   ]);
 
   const readListed = await api.runRead({ action: "list" });
@@ -326,6 +332,8 @@ test("supports the full bundle and revalidates revocation before every action", 
   assert.deepEqual(
     capabilities.map((operation) => operation.operationId),
     [
+      "getOwnProfile",
+      "updateOwnProfile",
       "createPost",
       "createReply",
       "getUnreadDirectMessageCount",
@@ -519,6 +527,111 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
   const readRequest = calls.find((request) => new URL(request.url).pathname.endsWith("/direct-messages/dm-1/read"));
   assert.ok(readRequest);
   assert.deepEqual(await readRequest.clone().json(), {});
+});
+
+test("reads and updates the connected profile through dynamic operations with opaque ETags", async () => {
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  const calls: Request[] = [];
+  const api = new OrbitAgentApi(
+    publicApi(),
+    new OrbitMcpApi({
+      ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
+      ORBIT_SERVICE: service(async (request) => {
+        calls.push(request);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/agent/state")) return jsonResponse(state(scopes));
+        if (path.endsWith("/agent/profile/update")) {
+          assert.deepEqual(await request.clone().json(), {
+            etag: "\"profile-v7\"",
+            bio: "Updated profile",
+            accent: "#12abef",
+          });
+          return jsonResponse({
+            etag: "\"profile-v8\"",
+            profile: {
+              handle: "selene",
+              bio: "Updated profile",
+              avatarAsset: null,
+              role: "Orbit agent",
+              accent: "#12abef",
+              pinnedRecordId: null,
+              updatedAt: 8,
+            },
+          });
+        }
+        if (path.endsWith("/agent/profile")) {
+          assert.deepEqual(await request.clone().json(), {});
+          return jsonResponse({
+            etag: "\"profile-v7\"",
+            profile: {
+              handle: "selene",
+              bio: "Current profile",
+              avatarAsset: null,
+              role: "Orbit agent",
+              accent: "#6f63e8",
+              pinnedRecordId: null,
+              updatedAt: 7,
+            },
+          });
+        }
+        return jsonResponse({ error: { code: "not_found", message: "Not found" } }, { status: 404 });
+      }),
+    }),
+    props(scopes),
+  );
+
+  const listed = await api.runRead({ action: "list" });
+  const operations = listed.operations as Array<{ operationId: string; tool?: string }>;
+  assert.equal(operations.find((operation) => operation.operationId === "getOwnProfile")?.tool, "orbit_read");
+  assert.equal(operations.find((operation) => operation.operationId === "updateOwnProfile")?.tool, "orbit_action");
+
+  const profile = await api.runRead({ action: "call", operationId: "getOwnProfile" });
+  assert.equal(profile.status, 200);
+  assert.deepEqual(profile.body, {
+    etag: "\"profile-v7\"",
+    profile: {
+      handle: "selene",
+      bio: "Current profile",
+      avatarAsset: null,
+      role: "Orbit agent",
+      accent: "#6f63e8",
+      pinnedRecordId: null,
+      updatedAt: 7,
+    },
+  });
+
+  await assert.rejects(
+    () => api.runAction({ operationId: "updateOwnProfile", body: { bio: "Missing ETag" } }),
+    /body.etag/u,
+  );
+  await assert.rejects(
+    () => api.runAction({
+      operationId: "updateOwnProfile",
+      body: { etag: "\"profile-v7\"", bio: "No idempotency key here" },
+      idempotencyKey: "unexpected",
+    }),
+    /does not accept idempotencyKey/u,
+  );
+
+  const updated = await api.runAction({
+    operationId: "updateOwnProfile",
+    body: { etag: "\"profile-v7\"", bio: " Updated profile ", accent: "#12ABEF" },
+  });
+  assert.equal(updated.status, 200);
+  assert.deepEqual(updated.body, {
+    etag: "\"profile-v8\"",
+    profile: {
+      handle: "selene",
+      bio: "Updated profile",
+      avatarAsset: null,
+      role: "Orbit agent",
+      accent: "#12abef",
+      pinnedRecordId: null,
+      updatedAt: 8,
+    },
+  });
+  assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/profile")));
+  assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/profile/update")));
 });
 
 test("rejects live identity drift from token-bound OAuth props", async () => {
