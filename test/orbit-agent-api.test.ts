@@ -9,6 +9,32 @@ import type { OrbitGrantScope } from "../src/orbit-scopes";
 
 const SERVICE_SECRET = "test-service-secret-at-least-32-bytes-long";
 
+const ACTIVE_PRIVATE_OPERATION_IDS = [
+  "getOwnProfile",
+  "updateOwnProfile",
+  "beginAvatarUpload",
+  "createPost",
+  "createReply",
+  "listOwnAgentRecords",
+  "getOwnAgentRecord",
+  "reviseOwnRecord",
+  "withdrawOwnPendingRecord",
+  "deleteOwnRecord",
+  "getUnreadAnnouncementCount",
+  "listAnnouncements",
+  "markAnnouncementRead",
+  "followAgent",
+  "unfollowAgent",
+  "listOwnFollows",
+  "listFollowingFeed",
+  "getUnreadDirectMessageCount",
+  "listDirectMessages",
+  "sendDirectMessage",
+  "markDirectMessageRead",
+] as const;
+
+const LISTED_OPERATION_IDS = [...ACTIVE_PRIVATE_OPERATION_IDS, "listPublicFeed"].sort();
+
 const contract = {
   openapi: "3.2.0",
   info: { version: "test" },
@@ -125,17 +151,7 @@ test("keeps a legacy partial permission snapshot evergreen", async () => {
   assert.equal(result.authorizationMode, "full_access");
   assert.deepEqual(
     (result.capabilities as Array<{ operationId: string }>).map((operation) => operation.operationId),
-    [
-      "getOwnProfile",
-      "updateOwnProfile",
-      "beginAvatarUpload",
-      "createPost",
-      "createReply",
-      "getUnreadDirectMessageCount",
-      "listDirectMessages",
-      "sendDirectMessage",
-      "markDirectMessageRead",
-    ],
+    ACTIVE_PRIVATE_OPERATION_IDS,
   );
   assert.equal(stateCalls, 1);
 });
@@ -171,18 +187,7 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, [
-    "beginAvatarUpload",
-    "createPost",
-    "createReply",
-    "getOwnProfile",
-    "getUnreadDirectMessageCount",
-    "listDirectMessages",
-    "listPublicFeed",
-    "markDirectMessageRead",
-    "sendDirectMessage",
-    "updateOwnProfile",
-  ]);
+  assert.deepEqual(operationIds, LISTED_OPERATION_IDS);
   const createPost = (listed.operations as Array<Record<string, unknown>>).find(
     (operation) => operation.operationId === "createPost",
   );
@@ -298,18 +303,7 @@ test("supports the full bundle and revalidates revocation before every action", 
   const operationIds = (listed.operations as Array<{ operationId: string }>).map(
     (operation) => operation.operationId,
   );
-  assert.deepEqual(operationIds, [
-    "beginAvatarUpload",
-    "createPost",
-    "createReply",
-    "getOwnProfile",
-    "getUnreadDirectMessageCount",
-    "listDirectMessages",
-    "listPublicFeed",
-    "markDirectMessageRead",
-    "sendDirectMessage",
-    "updateOwnProfile",
-  ]);
+  assert.deepEqual(operationIds, LISTED_OPERATION_IDS);
 
   const readListed = await api.runRead({ action: "list" });
   const readOperations = readListed.operations as Array<{ operationId: string; tool?: string }>;
@@ -334,17 +328,7 @@ test("supports the full bundle and revalidates revocation before every action", 
   const capabilities = status.capabilities as Array<Record<string, unknown>>;
   assert.deepEqual(
     capabilities.map((operation) => operation.operationId),
-    [
-      "getOwnProfile",
-      "updateOwnProfile",
-      "beginAvatarUpload",
-      "createPost",
-      "createReply",
-      "getUnreadDirectMessageCount",
-      "listDirectMessages",
-      "sendDirectMessage",
-      "markDirectMessageRead",
-    ],
+    ACTIVE_PRIVATE_OPERATION_IDS,
   );
   assert.deepEqual(status.grantedScopes, scopes);
   const replyCapability = capabilities.find((operation) => operation.operationId === "createReply");
@@ -717,6 +701,195 @@ test("reads and updates the connected profile through dynamic operations with op
   assert.equal(profileUpdateCalls, 2);
   assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/profile")));
   assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/profile/update")));
+});
+
+test("routes v0.5.1 non-media Agent API parity through an evergreen grant", async () => {
+  const scopes: OrbitGrantScope[] = ["feed:read"];
+  const calls: Request[] = [];
+  const api = new OrbitAgentApi(
+    publicApi(),
+    new OrbitMcpApi({
+      ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
+      ORBIT_SERVICE: service(async (request) => {
+        calls.push(request);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/agent/state")) return jsonResponse(state(scopes));
+
+        if (path.endsWith("/agent/records")) {
+          assert.deepEqual(await request.clone().json(), {
+            limit: 10,
+            state: "published",
+            kind: "post",
+            reviewStatus: "approved",
+          });
+          return jsonResponse({ records: [{ id: "record-1", lifecycleState: "published" }], nextCursor: null });
+        }
+        if (path.endsWith("/agent/records/record-1")) {
+          assert.deepEqual(await request.clone().json(), {});
+          return jsonResponse({ record: { id: "record-1", lifecycleState: "published" } });
+        }
+        if (path.endsWith("/records/record-1/revise")) {
+          assert.equal(request.headers.get("idempotency-key"), "revise-key");
+          assert.deepEqual(await request.clone().json(), { bodyMarkdown: "Revised text", mediaId: null });
+          return jsonResponse(
+            { record: { id: "record-1", lifecycleState: "published" } },
+            { status: 200, headers: { "idempotency-replayed": "true" } },
+          );
+        }
+        if (path.endsWith("/records/pending-1/withdraw")) {
+          assert.equal(request.headers.get("idempotency-key"), "withdraw-key");
+          assert.deepEqual(await request.clone().json(), {});
+          return jsonResponse({ record: { id: "pending-1", status: "withdrawn" } });
+        }
+        if (path.endsWith("/records/record-1/delete")) {
+          assert.equal(request.headers.get("idempotency-key"), "delete-key");
+          assert.deepEqual(await request.clone().json(), { reason: "acceptance cleanup" });
+          return jsonResponse({ record: { id: "record-1", status: "deleted" } });
+        }
+        if (path.endsWith("/announcements/unread-count")) {
+          assert.deepEqual(await request.clone().json(), {});
+          return jsonResponse({ unreadCount: 1, criticalCount: 0, warningCount: 0, infoCount: 1, highestSeverity: "info" });
+        }
+        if (path.endsWith("/announcements/list")) {
+          assert.deepEqual(await request.clone().json(), { limit: 5, cursor: "announcement-cursor" });
+          return jsonResponse({
+            announcements: [{ id: "announcement-1", targetedToConnectedAgent: true }],
+            nextCursor: null,
+          });
+        }
+        if (path.endsWith("/announcements/announcement-1/read")) {
+          assert.deepEqual(await request.clone().json(), {});
+          return jsonResponse({ announcement: { id: "announcement-1", readAt: 123 } });
+        }
+        if (path.endsWith("/follows/nyx/follow")) {
+          assert.deepEqual(await request.clone().json(), {});
+          return jsonResponse({ follow: { handle: "nyx", following: true } });
+        }
+        if (path.endsWith("/follows/nyx/unfollow")) {
+          assert.deepEqual(await request.clone().json(), {});
+          return jsonResponse({ follow: { handle: "nyx", following: false } });
+        }
+        if (path.endsWith("/follows/list")) {
+          assert.deepEqual(await request.clone().json(), { box: "following", limit: 7, cursor: "follow-cursor" });
+          return jsonResponse({
+            box: "following",
+            follows: [{ agent: { handle: "nyx" }, followedAt: 123 }],
+            nextCursor: null,
+          });
+        }
+        if (path.endsWith("/feed/following")) {
+          assert.deepEqual(await request.clone().json(), { limit: 6, cursor: "feed-cursor" });
+          return jsonResponse({ records: [{ id: "nyx-post-1" }], nextCursor: null });
+        }
+        return jsonResponse({ error: { code: "not_found", message: path } }, { status: 404 });
+      }),
+    }),
+    { ...props(scopes), scopeBundleVersion: 1 },
+  );
+
+  await assert.rejects(
+    () => api.runRead({ action: "call", operationId: "followAgent", pathParams: { handle: "nyx" } }),
+    /Use orbit_action/u,
+  );
+  await assert.rejects(
+    () => api.runAction({ operationId: "listOwnAgentRecords" }),
+    /Use orbit_read/u,
+  );
+
+  const ownRecords = await api.runRead({
+    action: "call",
+    operationId: "listOwnAgentRecords",
+    query: { limit: 10, state: "published", kind: "post", reviewStatus: "approved" },
+  });
+  assert.deepEqual(ownRecords.body, {
+    records: [{ id: "record-1", lifecycleState: "published" }],
+    nextCursor: null,
+  });
+
+  const ownRecord = await api.runRead({
+    action: "call",
+    operationId: "getOwnAgentRecord",
+    pathParams: { record: "record-1" },
+  });
+  assert.deepEqual(ownRecord.body, { record: { id: "record-1", lifecycleState: "published" } });
+
+  await assert.rejects(
+    () => api.runAction({
+      operationId: "reviseOwnRecord",
+      pathParams: { record: "record-1" },
+      body: { bodyMarkdown: "No media", mediaId: "not-allowed" },
+      idempotencyKey: "bad-revise-key",
+    }),
+    /accepts only body.bodyMarkdown/u,
+  );
+  const revised = await api.runAction({
+    operationId: "reviseOwnRecord",
+    pathParams: { record: "record-1" },
+    body: { bodyMarkdown: "Revised text" },
+    idempotencyKey: "revise-key",
+  });
+  assert.equal(revised.status, 200);
+  assert.equal(revised.idempotencyReplayed, true);
+
+  const withdrawn = await api.runAction({
+    operationId: "withdrawOwnPendingRecord",
+    pathParams: { record: "pending-1" },
+    idempotencyKey: "withdraw-key",
+  });
+  assert.equal((withdrawn.body as { record: { status: string } }).record.status, "withdrawn");
+
+  const deleted = await api.runAction({
+    operationId: "deleteOwnRecord",
+    pathParams: { record: "record-1" },
+    body: { reason: " acceptance cleanup " },
+    idempotencyKey: "delete-key",
+  });
+  assert.equal((deleted.body as { record: { status: string } }).record.status, "deleted");
+
+  const unread = await api.runRead({ action: "call", operationId: "getUnreadAnnouncementCount" });
+  assert.equal((unread.body as { unreadCount: number }).unreadCount, 1);
+
+  const announcements = await api.runRead({
+    action: "call",
+    operationId: "listAnnouncements",
+    query: { limit: 5, cursor: "announcement-cursor" },
+  });
+  assert.deepEqual(announcements.body, {
+    announcements: [{ id: "announcement-1", targetedToConnectedAgent: true }],
+    nextCursor: null,
+  });
+
+  const marked = await api.runAction({
+    operationId: "markAnnouncementRead",
+    pathParams: { id: "announcement-1" },
+  });
+  assert.equal((marked.body as { announcement: { id: string } }).announcement.id, "announcement-1");
+
+  const followed = await api.runAction({ operationId: "followAgent", pathParams: { handle: "nyx" } });
+  assert.deepEqual(followed.body, { follow: { handle: "nyx", following: true } });
+
+  const follows = await api.runRead({
+    action: "call",
+    operationId: "listOwnFollows",
+    query: { box: "following", limit: 7, cursor: "follow-cursor" },
+  });
+  assert.deepEqual(follows.body, {
+    box: "following",
+    follows: [{ agent: { handle: "nyx" }, followedAt: 123 }],
+    nextCursor: null,
+  });
+
+  const followingFeed = await api.runRead({
+    action: "call",
+    operationId: "listFollowingFeed",
+    query: { limit: 6, cursor: "feed-cursor" },
+  });
+  assert.deepEqual(followingFeed.body, { records: [{ id: "nyx-post-1" }], nextCursor: null });
+
+  const unfollowed = await api.runAction({ operationId: "unfollowAgent", pathParams: { handle: "nyx" } });
+  assert.deepEqual(unfollowed.body, { follow: { handle: "nyx", following: false } });
+
+  assert.ok(calls.every((request) => request.headers.get("authorization") === `Bearer ${SERVICE_SECRET}`));
 });
 
 test("rejects live identity drift from token-bound OAuth props", async () => {

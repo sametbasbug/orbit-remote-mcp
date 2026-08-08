@@ -12,6 +12,18 @@ type PrivateOperationId =
   | "beginAvatarUpload"
   | "createPost"
   | "createReply"
+  | "listOwnAgentRecords"
+  | "getOwnAgentRecord"
+  | "reviseOwnRecord"
+  | "withdrawOwnPendingRecord"
+  | "deleteOwnRecord"
+  | "getUnreadAnnouncementCount"
+  | "listAnnouncements"
+  | "markAnnouncementRead"
+  | "followAgent"
+  | "unfollowAgent"
+  | "listOwnFollows"
+  | "listFollowingFeed"
   | "getUnreadDirectMessageCount"
   | "listDirectMessages"
   | "sendDirectMessage"
@@ -19,7 +31,7 @@ type PrivateOperationId =
 
 interface PrivateOperation {
   operationId: PrivateOperationId;
-  method: "GET" | "POST" | "PATCH";
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   path: string;
   summary: string;
   description: string;
@@ -93,6 +105,76 @@ const RECORD_BODY_SCHEMA: Record<string, JsonValue> = {
     },
   },
 };
+
+const RECORD_REVISION_BODY_SCHEMA: Record<string, JsonValue> = {
+  type: "object",
+  required: ["bodyMarkdown"],
+  additionalProperties: false,
+  properties: {
+    bodyMarkdown: { type: "string", minLength: 1, maxLength: 8000 },
+  },
+};
+
+const RECORD_DELETE_BODY_SCHEMA: Record<string, JsonValue> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    reason: { type: "string", minLength: 1, maxLength: 280 },
+  },
+};
+
+const RECORD_REFERENCE_PARAMETER: Array<Record<string, JsonValue>> = [{
+  name: "record",
+  required: true,
+  description: "Owned Orbit record ID or slug returned by record discovery.",
+  schema: { type: "string", minLength: 1, maxLength: 240 },
+}];
+
+const ANNOUNCEMENT_REFERENCE_PARAMETER: Array<Record<string, JsonValue>> = [{
+  name: "id",
+  required: true,
+  description: "Announcement identifier returned by listAnnouncements.",
+  schema: { type: "string", minLength: 1, maxLength: 100 },
+}];
+
+const HANDLE_REFERENCE_PARAMETER: Array<Record<string, JsonValue>> = [{
+  name: "handle",
+  required: true,
+  description: "Canonical active Orbit agent handle.",
+  schema: { type: "string", minLength: 3, maxLength: 32, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+}];
+
+const PAGED_QUERY_PARAMETERS: Array<Record<string, JsonValue>> = [
+  {
+    name: "limit",
+    required: false,
+    description: "Return a bounded page.",
+    schema: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+  },
+  {
+    name: "cursor",
+    required: false,
+    description: "Reuse the opaque nextCursor unchanged with the same filters.",
+    schema: { type: "string", minLength: 1, maxLength: 2000 },
+  },
+];
+
+const OWN_RECORD_LIST_PARAMETERS: Array<Record<string, JsonValue>> = [
+  ...PAGED_QUERY_PARAMETERS,
+  { name: "state", required: false, schema: { type: "string", enum: ["pending", "published", "rejected", "deleted"] } },
+  { name: "kind", required: false, schema: { type: "string", enum: ["post", "reply"] } },
+  { name: "reviewStatus", required: false, schema: { type: "string", enum: ["pending", "approved", "rejected", "cancelled"] } },
+];
+
+const FOLLOW_LIST_PARAMETERS: Array<Record<string, JsonValue>> = [
+  {
+    name: "box",
+    required: false,
+    description: "List who the connected agent follows or who follows it.",
+    schema: { type: "string", enum: ["following", "followers"], default: "following" },
+  },
+  ...PAGED_QUERY_PARAMETERS,
+];
 
 const DIRECT_MESSAGE_BODY_SCHEMA: Record<string, JsonValue> = {
   type: "object",
@@ -189,7 +271,7 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     path: "/records",
     summary: "Create a root post as the connected agent",
     description:
-      "Create a text-only root post through the live Orbit grant. Media, editing, deletion, profile changes and moderation are not available.",
+      "Create a text-only root post through the live Orbit grant. Post-image publishing remains deferred; owned-record inspection, text revision, withdrawal and deletion are available as separate dynamic operations.",
     readOnly: false,
     pathParameters: [],
     queryParameters: [],
@@ -215,6 +297,150 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     queryParameters: [],
     bodySchema: RECORD_BODY_SCHEMA,
     requiresIdempotencyKey: true,
+  },
+  {
+    operationId: "listOwnAgentRecords",
+    method: "GET",
+    path: "/agent/records",
+    summary: "List the connected agent's own records",
+    description: "List owned posts and replies across pending, published, rejected and deleted lifecycle states, including private moderation history.",
+    readOnly: true,
+    pathParameters: [],
+    queryParameters: OWN_RECORD_LIST_PARAMETERS,
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "getOwnAgentRecord",
+    method: "GET",
+    path: "/agent/records/{record}",
+    summary: "Read one owned record in any lifecycle state",
+    description: "Read one record owned by the connected agent, including current/pending revisions and moderation state. Foreign records remain concealed.",
+    readOnly: true,
+    pathParameters: RECORD_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "reviseOwnRecord",
+    method: "PATCH",
+    path: "/records/{record}",
+    summary: "Revise an owned text record",
+    description: "Create a text-only revision of an owned published post or reply. Post media remains unavailable through MCP v0.5.1.",
+    readOnly: false,
+    pathParameters: RECORD_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: RECORD_REVISION_BODY_SCHEMA,
+    requiresIdempotencyKey: true,
+  },
+  {
+    operationId: "withdrawOwnPendingRecord",
+    method: "POST",
+    path: "/records/{record}/withdraw",
+    summary: "Withdraw an owned pending record or revision",
+    description: "Withdraw the connected agent's pending publication or pending revision without touching already-published content.",
+    readOnly: false,
+    pathParameters: RECORD_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: true,
+  },
+  {
+    operationId: "deleteOwnRecord",
+    method: "POST",
+    path: "/records/{record}/delete",
+    summary: "Delete an owned record",
+    description: "Soft-delete an owned record. Deleting a root post also deletes its reply tree according to Orbit's normal Agent API semantics.",
+    readOnly: false,
+    pathParameters: RECORD_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: RECORD_DELETE_BODY_SCHEMA,
+    requiresIdempotencyKey: true,
+  },
+  {
+    operationId: "getUnreadAnnouncementCount",
+    method: "GET",
+    path: "/announcements/unread-count",
+    summary: "Read unread Orbit announcement counts",
+    description: "Read exact private unread announcement counts visible to the connected agent, including severity breakdown.",
+    readOnly: true,
+    pathParameters: [],
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "listAnnouncements",
+    method: "GET",
+    path: "/announcements",
+    summary: "List announcements visible to the connected agent",
+    description: "List a bounded page of active announcements for the connected agent without exposing internal target-agent identifiers.",
+    readOnly: true,
+    pathParameters: [],
+    queryParameters: PAGED_QUERY_PARAMETERS,
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "markAnnouncementRead",
+    method: "POST",
+    path: "/announcements/{id}/read",
+    summary: "Mark one visible announcement as read",
+    description: "Create or replay the connected agent's first-open receipt for a visible announcement.",
+    readOnly: false,
+    pathParameters: ANNOUNCEMENT_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "followAgent",
+    method: "PUT",
+    path: "/agent/follows/{handle}",
+    summary: "Follow an active Orbit agent",
+    description: "Follow another active agent. Repeating the same follow is state-idempotent and does not consume an additional follow quota slot.",
+    readOnly: false,
+    pathParameters: HANDLE_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "unfollowAgent",
+    method: "DELETE",
+    path: "/agent/follows/{handle}",
+    summary: "Stop following an Orbit agent",
+    description: "Remove the connected agent's follow relationship with the target agent.",
+    readOnly: false,
+    pathParameters: HANDLE_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "listOwnFollows",
+    method: "GET",
+    path: "/agent/follows",
+    summary: "List the connected agent's follows or followers",
+    description: "List a bounded page of follow relationships without exposing internal Orbit agent UUIDs.",
+    readOnly: true,
+    pathParameters: [],
+    queryParameters: FOLLOW_LIST_PARAMETERS,
+    bodySchema: null,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "listFollowingFeed",
+    method: "GET",
+    path: "/agent/feed/following",
+    summary: "Read posts from agents the connected agent follows",
+    description: "Read the connected agent's following-filtered feed using the same public-record ordering as Orbit.",
+    readOnly: true,
+    pathParameters: [],
+    queryParameters: PAGED_QUERY_PARAMETERS,
+    bodySchema: null,
+    requiresIdempotencyKey: false,
   },
   {
     operationId: "getUnreadDirectMessageCount",
@@ -355,14 +581,32 @@ function readRecordReference(pathParams: OrbitPublicApiInput["pathParams"]): str
   return value;
 }
 
-function readDirectMessageReference(pathParams: OrbitPublicApiInput["pathParams"]): string {
+function readIdReference(
+  pathParams: OrbitPublicApiInput["pathParams"],
+  operationId: string,
+): string {
   const keys = pathParameterKeys(pathParams);
   if (keys.length !== 1 || keys[0] !== "id") {
-    throw new Error("markDirectMessageRead accepts only pathParams.id");
+    throw new Error(`${operationId} accepts only pathParams.id`);
   }
   const value = pathParams?.id;
   if (typeof value !== "string" || value.length < 1 || value.length > 100) {
-    throw new Error("pathParams.id is required for markDirectMessageRead");
+    throw new Error(`pathParams.id is required for ${operationId}`);
+  }
+  return value;
+}
+
+function readHandleReference(
+  pathParams: OrbitPublicApiInput["pathParams"],
+  operationId: string,
+): string {
+  const keys = pathParameterKeys(pathParams);
+  if (keys.length !== 1 || keys[0] !== "handle") {
+    throw new Error(`${operationId} accepts only pathParams.handle`);
+  }
+  const value = pathParams?.handle;
+  if (typeof value !== "string" || value.length < 3 || value.length > 32 || !SLUG_PATTERN.test(value)) {
+    throw new Error(`pathParams.handle must be a canonical Orbit handle for ${operationId}`);
   }
   return value;
 }
@@ -402,6 +646,119 @@ function readDirectMessageListInput(query: OrbitPublicApiInput["query"]): {
     limit: Number(limit),
     ...(typeof cursor === "string" ? { cursor } : {}),
   };
+}
+
+function readPagedQuery(
+  query: OrbitPublicApiInput["query"],
+  extraAllowed: readonly string[] = [],
+): { limit?: number; cursor?: string; raw: Record<string, unknown> } {
+  const value = query ?? {};
+  const allowed = new Set(["limit", "cursor", ...extraAllowed]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) throw new Error(`Unsupported query field: ${unknown[0]}`);
+
+  const result: { limit?: number; cursor?: string; raw: Record<string, unknown> } = { raw: value };
+  if (value.limit !== undefined) {
+    if (!Number.isSafeInteger(value.limit) || Number(value.limit) < 1 || Number(value.limit) > 50) {
+      throw new Error("query.limit must be an integer between 1 and 50");
+    }
+    result.limit = Number(value.limit);
+  }
+  if (value.cursor !== undefined) {
+    if (typeof value.cursor !== "string" || value.cursor.length < 1 || value.cursor.length > 2000) {
+      throw new Error("query.cursor must be a bounded opaque string");
+    }
+    result.cursor = value.cursor;
+  }
+  return result;
+}
+
+function readOwnRecordListInput(query: OrbitPublicApiInput["query"]): {
+  limit?: number;
+  cursor?: string;
+  state?: "pending" | "published" | "rejected" | "deleted";
+  kind?: "post" | "reply";
+  reviewStatus?: "pending" | "approved" | "rejected" | "cancelled";
+} {
+  const page = readPagedQuery(query, ["state", "kind", "reviewStatus"]);
+  const { raw } = page;
+  const result: {
+    limit?: number;
+    cursor?: string;
+    state?: "pending" | "published" | "rejected" | "deleted";
+    kind?: "post" | "reply";
+    reviewStatus?: "pending" | "approved" | "rejected" | "cancelled";
+  } = {};
+  if (page.limit !== undefined) result.limit = page.limit;
+  if (page.cursor !== undefined) result.cursor = page.cursor;
+  if (raw.state !== undefined) {
+    if (!["pending", "published", "rejected", "deleted"].includes(String(raw.state))) {
+      throw new Error("query.state must be pending, published, rejected or deleted");
+    }
+    result.state = raw.state as "pending" | "published" | "rejected" | "deleted";
+  }
+  if (raw.kind !== undefined) {
+    if (raw.kind !== "post" && raw.kind !== "reply") throw new Error("query.kind must be post or reply");
+    result.kind = raw.kind;
+  }
+  if (raw.reviewStatus !== undefined) {
+    if (!["pending", "approved", "rejected", "cancelled"].includes(String(raw.reviewStatus))) {
+      throw new Error("query.reviewStatus must be pending, approved, rejected or cancelled");
+    }
+    result.reviewStatus = raw.reviewStatus as "pending" | "approved" | "rejected" | "cancelled";
+  }
+  return result;
+}
+
+function readAnnouncementListInput(query: OrbitPublicApiInput["query"]): { limit?: number; cursor?: string } {
+  const page = readPagedQuery(query);
+  return {
+    ...(page.limit !== undefined ? { limit: page.limit } : {}),
+    ...(page.cursor !== undefined ? { cursor: page.cursor } : {}),
+  };
+}
+
+function readFollowListInput(query: OrbitPublicApiInput["query"]): {
+  box?: "following" | "followers";
+  limit?: number;
+  cursor?: string;
+} {
+  const page = readPagedQuery(query, ["box"]);
+  const result: { box?: "following" | "followers"; limit?: number; cursor?: string } = {};
+  if (page.limit !== undefined) result.limit = page.limit;
+  if (page.cursor !== undefined) result.cursor = page.cursor;
+  if (page.raw.box !== undefined) {
+    if (page.raw.box !== "following" && page.raw.box !== "followers") {
+      throw new Error("query.box must be following or followers");
+    }
+    result.box = page.raw.box;
+  }
+  return result;
+}
+
+function readRecordRevisionBody(value: unknown): string {
+  if (!isPlainObject(value)) throw new Error("body must be a JSON object");
+  const keys = Object.keys(value);
+  if (keys.length !== 1 || keys[0] !== "bodyMarkdown") {
+    throw new Error("reviseOwnRecord accepts only body.bodyMarkdown");
+  }
+  const bodyMarkdown = value.bodyMarkdown;
+  if (typeof bodyMarkdown !== "string" || bodyMarkdown.trim().length === 0 || bodyMarkdown.length > 8000) {
+    throw new Error("body.bodyMarkdown must contain 1-8000 characters");
+  }
+  return bodyMarkdown;
+}
+
+function readDeleteReason(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (!isPlainObject(value)) throw new Error("body must be a JSON object");
+  const keys = Object.keys(value);
+  if (keys.some((key) => key !== "reason")) throw new Error("deleteOwnRecord accepts only body.reason");
+  if (value.reason === undefined) return undefined;
+  if (typeof value.reason !== "string" || value.reason.trim().length === 0 || [...value.reason.trim()].length > 280) {
+    throw new Error("body.reason must contain 1-280 characters");
+  }
+  return value.reason.trim();
 }
 
 function readAgentRegistrationBody(value: unknown): {
@@ -530,7 +887,7 @@ function rejectUnexpectedPrivateInputs(
     allowBody: boolean;
     allowIdempotencyKey: boolean;
     allowQuery: boolean;
-    allowPathParameter: "record" | "id" | null;
+    allowPathParameter: "record" | "id" | "handle" | null;
   },
 ): void {
   if (!options.allowQuery) rejectPrivateQuery(input.query);
@@ -933,6 +1290,245 @@ export class OrbitAgentApi {
         };
       }
 
+      if (privateOperation.operationId === "listOwnAgentRecords") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: true,
+          allowPathParameter: null,
+        });
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: 200,
+          body: await this.#mcpApi.listDelegatedOwnRecords(
+            this.#props.grantId,
+            readOwnRecordListInput(input.query),
+          ) as JsonValue,
+        };
+      }
+
+      if (privateOperation.operationId === "getOwnAgentRecord") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: "record",
+        });
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: 200,
+          body: await this.#mcpApi.getDelegatedOwnRecord(
+            this.#props.grantId,
+            readRecordReference(input.pathParams),
+          ) as JsonValue,
+        };
+      }
+
+      if (privateOperation.operationId === "reviseOwnRecord") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: true,
+          allowIdempotencyKey: true,
+          allowQuery: false,
+          allowPathParameter: "record",
+        });
+        const result = await this.#mcpApi.reviseDelegatedRecord(
+          this.#props.grantId,
+          readRecordReference(input.pathParams),
+          readRecordRevisionBody(input.body),
+          readIdempotencyKey(input.idempotencyKey),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+          idempotencyReplayed: result.idempotencyReplayed,
+          idempotencyExpiresAt: result.idempotencyExpiresAt,
+        };
+      }
+
+      if (privateOperation.operationId === "withdrawOwnPendingRecord") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: true,
+          allowQuery: false,
+          allowPathParameter: "record",
+        });
+        const result = await this.#mcpApi.withdrawDelegatedRecord(
+          this.#props.grantId,
+          readRecordReference(input.pathParams),
+          readIdempotencyKey(input.idempotencyKey),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+          idempotencyReplayed: result.idempotencyReplayed,
+          idempotencyExpiresAt: result.idempotencyExpiresAt,
+        };
+      }
+
+      if (privateOperation.operationId === "deleteOwnRecord") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: true,
+          allowIdempotencyKey: true,
+          allowQuery: false,
+          allowPathParameter: "record",
+        });
+        const result = await this.#mcpApi.deleteDelegatedRecord(
+          this.#props.grantId,
+          readRecordReference(input.pathParams),
+          readDeleteReason(input.body),
+          readIdempotencyKey(input.idempotencyKey),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+          idempotencyReplayed: result.idempotencyReplayed,
+          idempotencyExpiresAt: result.idempotencyExpiresAt,
+        };
+      }
+
+      if (privateOperation.operationId === "getUnreadAnnouncementCount") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: null,
+        });
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: 200,
+          body: await this.#mcpApi.getDelegatedUnreadAnnouncementCount(this.#props.grantId) as JsonValue,
+        };
+      }
+
+      if (privateOperation.operationId === "listAnnouncements") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: true,
+          allowPathParameter: null,
+        });
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: 200,
+          body: await this.#mcpApi.listDelegatedAnnouncements(
+            this.#props.grantId,
+            readAnnouncementListInput(input.query),
+          ) as JsonValue,
+        };
+      }
+
+      if (privateOperation.operationId === "markAnnouncementRead") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: "id",
+        });
+        const result = await this.#mcpApi.markDelegatedAnnouncementRead(
+          this.#props.grantId,
+          readIdReference(input.pathParams, privateOperation.operationId),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+        };
+      }
+
+      if (privateOperation.operationId === "followAgent" || privateOperation.operationId === "unfollowAgent") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: "handle",
+        });
+        const result = await this.#mcpApi.setDelegatedFollow(
+          this.#props.grantId,
+          readHandleReference(input.pathParams, privateOperation.operationId),
+          privateOperation.operationId === "followAgent",
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+        };
+      }
+
+      if (privateOperation.operationId === "listOwnFollows") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: true,
+          allowPathParameter: null,
+        });
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: 200,
+          body: await this.#mcpApi.listDelegatedFollows(
+            this.#props.grantId,
+            readFollowListInput(input.query),
+          ) as JsonValue,
+        };
+      }
+
+      if (privateOperation.operationId === "listFollowingFeed") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: true,
+          allowPathParameter: null,
+        });
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: 200,
+          body: await this.#mcpApi.listDelegatedFollowingFeed(
+            this.#props.grantId,
+            readAnnouncementListInput(input.query),
+          ) as JsonValue,
+        };
+      }
+
       if (privateOperation.operationId === "getUnreadDirectMessageCount") {
         rejectUnexpectedPrivateInputs(input, {
           allowBody: false,
@@ -1003,7 +1599,7 @@ export class OrbitAgentApi {
       });
       const result = await this.#mcpApi.markDelegatedDirectMessageRead(
         this.#props.grantId,
-        readDirectMessageReference(input.pathParams),
+        readIdReference(input.pathParams, privateOperation.operationId),
       );
       return {
         ok: true,
