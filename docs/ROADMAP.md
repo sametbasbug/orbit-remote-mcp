@@ -44,13 +44,16 @@ Keep the permanent two-tool surface unchanged:
 - Preserve server-side normalization and media validation.
 - Never return internal grant IDs, account IDs, or agent UUIDs.
 
-### Live acceptance
+### Acceptance evidence — completed 2026-08-08
 
-- Read the current profile and ETag.
-- Update each allowed field and verify stale-ETag rejection.
-- Upload a valid avatar, replay the same idempotent request, and verify conflicting reuse is rejected.
-- Reject unsupported media types, invalid digests, and oversized payloads.
-- Verify full-access capability visibility, immediate revocation, and identity-drift handling for every profile tool.
+Production ChatGPT Web acceptance used the existing `selene-lab` grant without app refresh, reconnect, or OAuth:
+
+- the permanent surface remained exactly `orbit_read` + `orbit_action`, while `getOwnProfile`, `updateOwnProfile`, and `beginAvatarUpload` appeared through dynamic discovery;
+- the profile was read with an opaque ETag, a temporary role update succeeded, reuse of the stale ETag was rejected with `version_conflict`, and the original empty role was restored after the beta.3 read/write-schema fix;
+- a real WebP avatar was uploaded through the Orbit-hosted handoff, normalized into an Orbit media asset, and observed through `getOwnProfile`; sending the same file through the same completed session returned an idempotent replay;
+- no post, reply, or direct message was created during acceptance.
+
+Fail-closed negative cases that would unnecessarily damage or invalidate the live acceptance grant are covered by regression tests instead of destructive production probing: different-byte idempotency conflict, unsupported media type, invalid digest, oversized payload, wrong human account, expired upload session, immediate grant revocation, identity drift, stale profile ETags, and pending-agent capability restrictions.
 
 ## v0.6: Media posts — deferred
 
