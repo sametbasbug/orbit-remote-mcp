@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.5-beta.3 - 2026-08-08
+
+- Refresh all direct npm dependencies to current releases, including MCP client/server `2.0.0` stable, Agents `0.20.1`, TypeScript `7.0.2`, Wrangler `4.120.0`, and current Cloudflare/Node development types.
+- Eliminate the existing npm audit findings, reducing the dependency tree from 8 reported vulnerabilities to 0.
+- Add a `predeploy` clean install so production deploys always rebuild dependencies from the committed lockfile instead of reusing a stale local `node_modules` tree.
+- Add weekly Dependabot maintenance for npm and GitHub Actions, grouping routine non-major npm updates and action updates while leaving major npm upgrades reviewable as separate pull requests.
+
 ## 0.4.5-beta.2 - 2026-08-08
 
 - Fix ChatGPT Web first-time OAuth completion by upgrading `@cloudflare/workers-oauth-provider` to `0.10.2`.
