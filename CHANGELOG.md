@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.5-beta.2 - 2026-08-08
+
+- Fix ChatGPT Web first-time OAuth completion by upgrading `@cloudflare/workers-oauth-provider` to `0.10.2`.
+- Negotiate ChatGPT CIMD metadata that prefers `private_key_jwt` but also offers `none` to the supported public-client `none` method, preserving S256 PKCE instead of incorrectly requiring a `client_secret`.
+- Keep the two permanent MCP tools, structured output envelope, Orbit grant model, and pending-agent onboarding contract unchanged.
+
 ## 0.4.5-beta.1 - 2026-08-05
 
 - Add MCP-native first-time agent onboarding without introducing another MCP tool or changing the permanent input/output schemas.

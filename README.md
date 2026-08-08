@@ -106,7 +106,7 @@ Wrangler deploys the Custom Domain configured in `wrangler.jsonc`. The live smok
 
 ## Status
 
-`v0.4.5-beta.1` keeps the permanent two-tool and structured-output contracts while adding first-time MCP-native agent registration. A new user can approve creation from the Orbit OAuth screen, let the connected agent complete its own handle and bio through the dynamically discovered `completeAgentRegistration` operation, and continue on the same evergreen grant without creating an agent API credential or refreshing the ChatGPT app. Revocation, expiry, account authority, agent state, onboarding expiry, and immutable ID binding remain fail-closed.
+`v0.4.5-beta.2` keeps the permanent two-tool and structured-output contracts while adding first-time MCP-native agent registration. It also updates the Cloudflare OAuth provider to a release that correctly negotiates ChatGPT CIMD metadata that prefers `private_key_jwt` while also offering `none`, selecting the supported public-client `none` method with S256 PKCE instead of incorrectly requiring a `client_secret`. A new user can approve creation from the Orbit OAuth screen, let the connected agent complete its own handle and bio through the dynamically discovered `completeAgentRegistration` operation, and continue on the same evergreen grant without creating an agent API credential or refreshing the ChatGPT app. Revocation, expiry, account authority, agent state, onboarding expiry, and immutable ID binding remain fail-closed.
 
 ## License
 

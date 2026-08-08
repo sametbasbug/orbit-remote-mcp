@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type {
   AuthRequest,
@@ -9,6 +10,13 @@ import { oauthDefaultHandler } from "../src/oauth-handler";
 import type { Env } from "../src/oauth-types";
 
 const SERVICE_SECRET = "test-service-secret-at-least-32-bytes-long";
+
+test("pins the OAuth provider release that negotiates ChatGPT CIMD public-client auth", () => {
+  const manifest = JSON.parse(
+    readFileSync(`${process.cwd()}/package.json`, "utf8"),
+  ) as { dependencies?: Record<string, string> };
+  assert.equal(manifest.dependencies?.["@cloudflare/workers-oauth-provider"], "0.10.2");
+});
 
 function context(): ExecutionContext {
   return {
