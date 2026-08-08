@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0-beta.3 - 2026-08-08
+
+- Allow `updateOwnProfile` to clear the optional `role` field back to an empty string, matching Orbit's persisted/read profile model.
+- Trim role input while preserving the existing 80-character bound; bio remains non-empty and other profile constraints are unchanged.
+- Add regression coverage for restoring an empty role through the same opaque ETag concurrency flow used by production acceptance.
+
 ## 0.5.0-beta.2 - 2026-08-08
 
 - Add dynamically discovered `beginAvatarUpload` on the permanent `orbit_action` tool without changing the top-level MCP schema.

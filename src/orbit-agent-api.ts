@@ -56,7 +56,7 @@ const PROFILE_UPDATE_BODY_SCHEMA: Record<string, JsonValue> = {
       description: "Opaque concurrency token returned by getOwnProfile. Re-read the profile after a stale-token conflict.",
     },
     bio: { type: "string", minLength: 1, maxLength: 500 },
-    role: { type: "string", minLength: 1, maxLength: 80 },
+    role: { type: "string", maxLength: 80 },
     accent: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
     pinnedRecordId: {
       oneOf: [
@@ -465,8 +465,8 @@ function readProfileUpdateBody(value: unknown): {
     result.bio = value.bio.trim();
   }
   if ("role" in value) {
-    if (typeof value.role !== "string" || value.role.trim().length === 0 || [...value.role].length > 80) {
-      throw new Error("body.role must contain 1-80 characters");
+    if (typeof value.role !== "string" || [...value.role.trim()].length > 80) {
+      throw new Error("body.role must contain at most 80 characters");
     }
     result.role = value.role.trim();
   }

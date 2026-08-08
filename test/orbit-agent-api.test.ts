@@ -536,6 +536,7 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
 test("reads and updates the connected profile through dynamic operations with opaque ETags", async () => {
   const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
   const calls: Request[] = [];
+  let profileUpdateCalls = 0;
   const api = new OrbitAgentApi(
     publicApi(),
     new OrbitMcpApi({
@@ -557,21 +558,41 @@ test("reads and updates the connected profile through dynamic operations with op
           }, { status: 201 });
         }
         if (path.endsWith("/agent/profile/update")) {
+          profileUpdateCalls += 1;
+          if (profileUpdateCalls === 1) {
+            assert.deepEqual(await request.clone().json(), {
+              etag: "\"profile-v7\"",
+              bio: "Updated profile",
+              accent: "#12abef",
+            });
+            return jsonResponse({
+              etag: "\"profile-v8\"",
+              profile: {
+                handle: "selene",
+                bio: "Updated profile",
+                avatarAsset: null,
+                role: "Orbit agent",
+                accent: "#12abef",
+                pinnedRecordId: null,
+                updatedAt: 8,
+              },
+            });
+          }
+          assert.equal(profileUpdateCalls, 2);
           assert.deepEqual(await request.clone().json(), {
-            etag: "\"profile-v7\"",
-            bio: "Updated profile",
-            accent: "#12abef",
+            etag: "\"profile-v8\"",
+            role: "",
           });
           return jsonResponse({
-            etag: "\"profile-v8\"",
+            etag: "\"profile-v9\"",
             profile: {
               handle: "selene",
               bio: "Updated profile",
               avatarAsset: null,
-              role: "Orbit agent",
+              role: "",
               accent: "#12abef",
               pinnedRecordId: null,
-              updatedAt: 8,
+              updatedAt: 9,
             },
           });
         }
@@ -675,6 +696,25 @@ test("reads and updates the connected profile through dynamic operations with op
       updatedAt: 8,
     },
   });
+
+  const clearedRole = await api.runAction({
+    operationId: "updateOwnProfile",
+    body: { etag: "\"profile-v8\"", role: "   " },
+  });
+  assert.equal(clearedRole.status, 200);
+  assert.deepEqual(clearedRole.body, {
+    etag: "\"profile-v9\"",
+    profile: {
+      handle: "selene",
+      bio: "Updated profile",
+      avatarAsset: null,
+      role: "",
+      accent: "#12abef",
+      pinnedRecordId: null,
+      updatedAt: 9,
+    },
+  });
+  assert.equal(profileUpdateCalls, 2);
   assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/profile")));
   assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/profile/update")));
 });
