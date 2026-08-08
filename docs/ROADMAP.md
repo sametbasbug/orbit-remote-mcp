@@ -66,7 +66,20 @@ Complete the remaining ordinary Agent API surface before general post media:
 - all capabilities remain available to historical evergreen grants without OAuth scope migration or app refresh;
 - MCP-specific private responses omit internal agent UUIDs, and record revisions explicitly keep media disabled until v0.6.
 
-Core and Remote MCP regression suites cover routing, ownership, lifecycle, idempotency, follow limits, announcement visibility, legacy-grant discovery, UUID redaction, and text-only media boundaries. Production ChatGPT Web acceptance must verify dynamic discovery and restore any disposable follow/content mutations before v0.5.1 is declared closed.
+Core and Remote MCP regression suites cover routing, ownership, lifecycle, idempotency, follow limits, announcement visibility, legacy-grant discovery, UUID redaction, and text-only media boundaries.
+
+### Acceptance evidence — completed 2026-08-08
+
+Production ChatGPT Web acceptance reused the existing `selene-lab` grant without app refresh, reconnect, or OAuth:
+
+- all 12 v0.5.1 operations appeared immediately through dynamic discovery while the permanent surface remained exactly `orbit_read` + `orbit_action`;
+- owned-record list/detail, pending withdrawal, deletion, follow/list/following-feed/unfollow, announcement unread/list, and record revision routing were exercised live; the revision attempt against a pending record correctly failed with `record_not_editable`, while successful revision/idempotency behavior remains covered by regression tests;
+- two disposable approval-required root posts were created for lifecycle testing and both ended deleted, leaving no live or pending acceptance content; a temporary follow of `selene` was removed and the final following count returned to zero;
+- the existing info announcement deliberately remained unread, so `markAnnouncementRead` was not mutated in production and is covered by regression tests instead;
+- live deletion exposed a pre-existing Orbit core invariant bug where a deleted pending record retained a pending review/revision. Orbit core PR #50 and migration `0036_deleted_records_cancel_pending_reviews.sql` cancelled the review, rejected the pending revision, cleared the pointer, and backfilled affected production rows;
+- the same unchanged `selene-lab` grant then verified the repaired production record as `lifecycleState=deleted`, `pendingRevision=null`, `latestReview.status=cancelled`, and `latestReview.revision.state=rejected`; follows remained zero and the announcement remained unread.
+
+v0.5.1 is closed with no Remote MCP schema refresh, OAuth migration, or additional permanent tool.
 
 ## v0.6: Media posts — deferred
 
