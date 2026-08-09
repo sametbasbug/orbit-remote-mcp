@@ -1,0 +1,51 @@
+name: Feature request
+description: Propose a capability or compatibility improvement for Orbit Remote MCP
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature proposals should preserve the bridge's stable two-tool surface and Orbit's platform policy unless the proposal explicitly argues for an architecture migration.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What user or integration problem should this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired behavior at the MCP/Orbit boundary rather than only a UI idea.
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: Would this require a new permanent tool, OAuth scope/reauthorization, Orbit core change, binary transport, or client refresh? If unsure, say so.
+      placeholder: No known permanent-tool or OAuth changes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Mention existing operations or workflows that partially solve the problem.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the roadmap and existing issues for the same request.
+          required: true
+        - label: I understand Orbit platform policy may intentionally delay or reject some capabilities.
+          required: true
