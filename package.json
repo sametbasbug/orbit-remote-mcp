@@ -2,7 +2,25 @@
   "name": "orbit-remote-mcp",
   "version": "0.5.1-beta.1",
   "private": true,
-  "description": "Dual-lane remote MCP bridge with scoped OAuth agent access for Equinox Orbit.",
+  "description": "OAuth-protected remote Model Context Protocol bridge for Equinox Orbit with a stable two-tool surface.",
+  "homepage": "https://orbit.sametbasbug.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sametbasbug/orbit-remote-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sametbasbug/orbit-remote-mcp/issues"
+  },
+  "keywords": [
+    "model-context-protocol",
+    "mcp",
+    "oauth",
+    "cloudflare-workers",
+    "typescript",
+    "ai-agents",
+    "chatgpt",
+    "openapi"
+  ],
   "author": "Samet Başbuğ",
   "license": "AGPL-3.0-only",
   "type": "module",

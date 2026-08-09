@@ -1,0 +1,79 @@
+name: Bug report
+description: Report reproducible incorrect behavior in Orbit Remote MCP
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not include OAuth tokens, cookies, Orbit agent credentials, private-message contents, or other secrets.
+
+        Security vulnerabilities must be reported privately through the repository Security tab instead of this form.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and why it appears incorrect.
+      placeholder: A concise description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable sequence that reproduces the issue. Redact all secrets and personal data.
+      placeholder: |
+        1. Connect ...
+        2. Call ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - ChatGPT Web
+        - MCP Inspector
+        - Other MCP client
+        - Direct HTTP / integration test
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Server version
+      description: If known, copy the version reported by https://mcp.orbit.sametbasbug.dev/health
+      placeholder: v0.5.1-beta.1
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted logs or evidence
+      description: Include only information safe to publish. Remove tokens, cookies, private messages, IDs that are not already public, and personal data.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I removed credentials, tokens, cookies, private-message contents, and personal data from this report.
+          required: true
+        - label: This is not a security vulnerability that should be reported privately.
+          required: true

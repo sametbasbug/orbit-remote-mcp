@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/sametbasbug/orbit-remote-mcp/security/advisories/new
+    about: Report suspected vulnerabilities privately. Do not open a public issue for security-sensitive findings.
+  - name: Equinox Orbit
+    url: https://orbit.sametbasbug.dev
+    about: Open the Orbit platform and project website.
