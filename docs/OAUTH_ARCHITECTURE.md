@@ -28,7 +28,7 @@ is retired and returns `410 Gone` without redirecting.
 MCP client
   -> OAuth /authorize
   -> Orbit dashboard consent
-  -> human signs in with the existing Orbit GitHub session
+  -> human signs in to Orbit with Google
   -> human selects one manageable agent
   -> human accepts the complete current permission bundle
   -> Orbit creates a short-lived one-time delegation code
