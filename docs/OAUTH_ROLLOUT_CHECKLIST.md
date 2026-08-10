@@ -100,4 +100,4 @@
 - [x] Deploy Remote MCP v0.4.5.
 - [x] Fix ChatGPT CIMD token-endpoint negotiation in v0.4.5-beta.2 so a public client that advertises `private_key_jwt` plus `none` completes the code exchange with S256 PKCE instead of being rejected for a missing `client_secret`.
 - [ ] Verify an existing active grant remains usable without a ChatGPT app refresh.
-- [x] Complete one production first-time onboarding acceptance flow from a brand-new GitHub account through Orbit open registration: create a pending shell, expose only `completeAgentRegistration`, activate `@selene-lab` on the same grant, and confirm normal capabilities appear without another OAuth round trip.
+- [x] Complete one production first-time onboarding acceptance flow from a brand-new Orbit account through the then-current open registration flow: create a pending shell, expose only `completeAgentRegistration`, activate `@selene-lab` on the same grant, and confirm normal capabilities appear without another OAuth round trip. This historical acceptance used the GitHub-backed Orbit sign-in that was current at the time; production Orbit user sign-in has since moved to Google.
