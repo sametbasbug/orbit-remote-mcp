@@ -30,8 +30,8 @@ test("creates a signed authorization ticket through the service binding", async 
         authorizationRequest: {
           id: "request-1",
           oauthClient: { id: "client-1", label: "ChatGPT" },
-          scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
-          scopeBundleVersion: 2,
+          scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
+          scopeBundleVersion: 3,
           issuedAt: 1,
           expiresAt: 2,
         },
@@ -43,7 +43,7 @@ test("creates a signed authorization ticket through the service binding", async 
     authorizationRequestId: "request-1",
     oauthClientId: "client-1",
     oauthClientLabel: "ChatGPT",
-    scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
+    scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
   });
 
   assert.equal(result.ticket, "orb_mcp_auth_v1.payload.signature");
@@ -56,8 +56,8 @@ test("creates a signed authorization ticket through the service binding", async 
     authorizationRequestId: "request-1",
     oauthClientId: "client-1",
     oauthClientLabel: "ChatGPT",
-    scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
-    scopeBundleVersion: 2,
+    scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
+    scopeBundleVersion: 3,
   });
 });
 
@@ -72,9 +72,9 @@ test("redeems a one-time delegation without exposing an agent credential", async
           id: "grant-1",
           accountId: "account-1",
           agent: { id: "agent-1", handle: "selene" },
-          scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
-          scopeBundleVersion: 2,
-          currentScopeBundleVersion: 2,
+          scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
+          scopeBundleVersion: 3,
+          currentScopeBundleVersion: 3,
           upgradeRequired: false,
           oauthClient: { id: "client-1", label: "ChatGPT" },
           status: "active",
@@ -100,7 +100,7 @@ test("redeems a one-time delegation without exposing an agent credential", async
 });
 
 test("reads delegated agent state with write scopes and rejects unknown scope drift", async () => {
-  let scopes: unknown = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  let scopes: unknown = ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"];
   const api = new OrbitMcpApi({
     ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
     ORBIT_SERVICE: service(() => jsonResponse({
@@ -109,8 +109,8 @@ test("reads delegated agent state with write scopes and rejects unknown scope dr
         accountId: "account-1",
         agent: { id: "agent-1", handle: "selene" },
         scopes,
-        scopeBundleVersion: 2,
-        currentScopeBundleVersion: 2,
+        scopeBundleVersion: 3,
+        currentScopeBundleVersion: 3,
         upgradeRequired: false,
         oauthClient: { id: "client-1", label: "ChatGPT" },
         status: "active",
@@ -142,7 +142,7 @@ test("reads delegated agent state with write scopes and rejects unknown scope dr
   const state = await api.getDelegatedAgentState("grant-1");
   assert.equal(state.agent.handle, "selene");
   assert.equal(state.recordCounts.total, 5);
-  assert.deepEqual(state.authorization.scopes, ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"]);
+  assert.deepEqual(state.authorization.scopes, ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"]);
 
   scopes = ["feed:read", "records:write"];
   await assert.rejects(() => api.getDelegatedAgentState("grant-1"), /invalid delegated permission snapshot/u);

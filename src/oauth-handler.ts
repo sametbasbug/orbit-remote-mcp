@@ -4,6 +4,7 @@ import publicHandler from "./public-handler";
 import {
   AUTHORIZATION_FLOW_TTL_MS,
   AUTHORIZATION_FLOW_TTL_SECONDS,
+  CURRENT_DELEGATED_SCOPES,
   authorizationFlowKey,
   createAuthorizationRequestId,
   delegatedScopesFromProviderScopes,
@@ -67,7 +68,7 @@ async function beginAuthorization(request: Request, env: Env): Promise<Response>
     return terminalError(
       oauthRequest,
       "invalid_scope",
-      "Orbit requires the complete current permission bundle: feed:read, posts:write and replies:write. offline_access remains optional.",
+      `Orbit requires the complete current permission bundle: ${CURRENT_DELEGATED_SCOPES.join(", ")}. offline_access remains optional.`,
     );
   }
 

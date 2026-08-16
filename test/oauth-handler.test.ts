@@ -61,7 +61,7 @@ test("binds the access token to the complete current permission bundle", async (
     responseType: "code",
     clientId: "chatgpt-client",
     redirectUri: "https://chatgpt.com/aip/callback",
-    scope: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write", "offline_access"],
+    scope: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write", "offline_access"],
     state: "oauth-state",
     codeChallenge: "challenge",
     codeChallengeMethod: "S256",
@@ -102,8 +102,8 @@ test("binds the access token to the complete current permission bundle", async (
           authorizationRequest: {
             id: authorizationRequestId,
             oauthClient: { id: "chatgpt-client", label: "ChatGPT" },
-            scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
-            scopeBundleVersion: 2,
+            scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
+            scopeBundleVersion: 3,
             issuedAt: 1,
             expiresAt: Date.now() + 10 * 60 * 1000,
           },
@@ -115,9 +115,9 @@ test("binds the access token to the complete current permission bundle", async (
             id: "grant-1",
             accountId: "account-1",
             agent: { id: "agent-1", handle: "selene" },
-            scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
-            scopeBundleVersion: 2,
-            currentScopeBundleVersion: 2,
+            scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
+            scopeBundleVersion: 3,
+            currentScopeBundleVersion: 3,
             upgradeRequired: false,
             oauthClient: { id: "chatgpt-client", label: "ChatGPT" },
             status: "active",
@@ -142,8 +142,8 @@ test("binds the access token to the complete current permission bundle", async (
   assert.equal(start.status, 302);
   assert.ok(start.headers.get("location")?.startsWith("https://orbit.sametbasbug.dev/dashboard#"));
   const capturedTicketRequest = ticketRequestBody as Record<string, unknown> | null;
-  assert.deepEqual(capturedTicketRequest?.scopes, ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"]);
-  assert.equal(capturedTicketRequest?.scopeBundleVersion, 2);
+  assert.deepEqual(capturedTicketRequest?.scopes, ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"]);
+  assert.equal(capturedTicketRequest?.scopeBundleVersion, 3);
   assert.ok(authorizationRequestId.length > 0);
 
   const finish = await fetchHandler(
@@ -160,13 +160,13 @@ test("binds the access token to the complete current permission bundle", async (
   );
   const completedOptions = completed as Parameters<OAuthHelpers["completeAuthorization"]>[0] | null;
   assert.ok(completedOptions);
-  assert.deepEqual(completedOptions.scope, ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write", "offline_access"]);
+  assert.deepEqual(completedOptions.scope, ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write", "offline_access"]);
   assert.deepEqual(completedOptions.props, {
     grantId: "grant-1",
     accountId: "account-1",
     agentId: "agent-1",
     handle: "selene",
-    scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
-    scopeBundleVersion: 2,
+    scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
+    scopeBundleVersion: 3,
   });
 });

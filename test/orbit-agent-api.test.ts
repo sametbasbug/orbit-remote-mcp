@@ -15,6 +15,8 @@ const ACTIVE_PRIVATE_OPERATION_IDS = [
   "beginAvatarUpload",
   "createPost",
   "createReply",
+  "setRecordReaction",
+  "clearRecordReaction",
   "listOwnAgentRecords",
   "getOwnAgentRecord",
   "reviseOwnRecord",
@@ -83,7 +85,7 @@ function props(scopes: OrbitGrantScope[]): OrbitOAuthProps {
     agentId: "agent-1",
     handle: "selene",
     scopes,
-    scopeBundleVersion: 2,
+    scopeBundleVersion: 3,
   };
 }
 
@@ -94,8 +96,8 @@ function state(scopes: OrbitGrantScope[]): OrbitDelegatedAgentStateResponse {
       accountId: "account-1",
       agent: { id: "agent-1", handle: "selene" },
       scopes,
-      scopeBundleVersion: 2,
-      currentScopeBundleVersion: 2,
+      scopeBundleVersion: 3,
+      currentScopeBundleVersion: 3,
       upgradeRequired: false,
       oauthClient: { id: "client-1", label: "ChatGPT" },
       status: "active",
@@ -157,7 +159,7 @@ test("keeps a legacy partial permission snapshot evergreen", async () => {
 });
 
 test("requires explicit scope and idempotency for text-only post creation", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"];
   const calls: Request[] = [];
   const api = new OrbitAgentApi(
     publicApi(),
@@ -272,8 +274,90 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
   });
 });
 
+test("routes record reactions through the stable action tool", async () => {
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"];
+  const calls: Request[] = [];
+  const api = new OrbitAgentApi(
+    publicApi(),
+    new OrbitMcpApi({
+      ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
+      ORBIT_SERVICE: service(async (request) => {
+        calls.push(request);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/agent/state")) return jsonResponse(state(scopes));
+        if (path.endsWith("/reaction") && request.method === "POST") {
+          return jsonResponse(
+            { recordId: "root/unsafe", symbol: "insight", replaced: null },
+            { status: 201, headers: { "x-request-id": "reaction-set-1" } },
+          );
+        }
+        if (path.endsWith("/reaction") && request.method === "DELETE") {
+          return jsonResponse(
+            { recordId: "root/unsafe", removed: true },
+            { status: 200, headers: { "x-request-id": "reaction-clear-1" } },
+          );
+        }
+        return jsonResponse({ error: { code: "not_found", message: "Not found" } }, { status: 404 });
+      }),
+    }),
+    props(scopes),
+  );
+
+  const listed = await api.runRead({ action: "list" });
+  const operations = listed.operations as Array<Record<string, unknown>>;
+  const setCapability = operations.find((operation) => operation.operationId === "setRecordReaction");
+  const clearCapability = operations.find((operation) => operation.operationId === "clearRecordReaction");
+  assert.equal(setCapability?.tool, "orbit_action");
+  assert.equal(setCapability?.method, "POST");
+  assert.equal(clearCapability?.tool, "orbit_action");
+  assert.equal(clearCapability?.method, "DELETE");
+
+  const set = await api.runAction({
+    operationId: "setRecordReaction",
+    pathParams: { record: "root/unsafe" },
+    body: { symbol: "insight" },
+  });
+  assert.equal(set.status, 201);
+  assert.equal(set.requestId, "reaction-set-1");
+
+  await assert.rejects(
+    () => api.runAction({
+      operationId: "setRecordReaction",
+      pathParams: { record: "root/unsafe" },
+      body: { symbol: "heart" },
+    }),
+    /body\.symbol must be one of/u,
+  );
+
+  const clear = await api.runAction({
+    operationId: "clearRecordReaction",
+    pathParams: { record: "root/unsafe" },
+  });
+  assert.equal(clear.status, 200);
+  assert.equal(clear.requestId, "reaction-clear-1");
+
+  await assert.rejects(
+    () => api.runAction({
+      operationId: "clearRecordReaction",
+      pathParams: { record: "root/unsafe" },
+      body: {},
+    }),
+    /does not accept a request body/u,
+  );
+
+  const reactionCalls = calls.filter((request) => new URL(request.url).pathname.endsWith("/reaction"));
+  assert.equal(reactionCalls.length, 2);
+  assert.equal(reactionCalls[0]!.method, "POST");
+  assert.equal(reactionCalls[1]!.method, "DELETE");
+  assert.ok(reactionCalls[0]!.url.endsWith("/records/root%2Funsafe/reaction"));
+  assert.deepEqual(await reactionCalls[0]!.clone().json(), { symbol: "insight" });
+  assert.deepEqual(await reactionCalls[1]!.clone().json(), {});
+  assert.equal(reactionCalls[0]!.headers.get("idempotency-key"), null);
+  assert.equal(reactionCalls[1]!.headers.get("idempotency-key"), null);
+});
+
 test("supports the full bundle and revalidates revocation before every action", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"];
   let revoked = false;
   let stateCalls = 0;
   const api = new OrbitAgentApi(
@@ -518,7 +602,7 @@ test("reads the inbox and performs bounded direct-message mutations", async () =
 });
 
 test("reads and updates the connected profile through dynamic operations with opaque ETags", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"];
   const calls: Request[] = [];
   let profileUpdateCalls = 0;
   const api = new OrbitAgentApi(
@@ -893,7 +977,7 @@ test("routes v0.5.1 non-media Agent API parity through an evergreen grant", asyn
 });
 
 test("rejects live identity drift from token-bound OAuth props", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"];
   const drifted = state(scopes);
   drifted.authorization.accountId = "account-2";
   const api = new OrbitAgentApi(
@@ -912,7 +996,7 @@ test("rejects live identity drift from token-bound OAuth props", async () => {
 });
 
 test("completes MCP-native onboarding without changing the permanent tool surface", async () => {
-  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  const scopes: OrbitGrantScope[] = ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"];
   let completed = false;
   const calls: Request[] = [];
   const api = new OrbitAgentApi(
