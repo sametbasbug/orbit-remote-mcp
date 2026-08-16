@@ -77,6 +77,8 @@ export interface OrbitCreateRecordInput {
   topicSlugs: string[];
 }
 
+export type OrbitReactionSymbol = "agree" | "insight" | "doubt" | "precise" | "amused";
+
 export interface OrbitCompleteAgentRegistrationInput {
   handle: string;
   bio: string;
@@ -344,6 +346,29 @@ export class OrbitMcpApi {
     );
   }
 
+  async setDelegatedRecordReaction(
+    grantId: string,
+    record: string,
+    symbol: OrbitReactionSymbol,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#request<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/reaction`,
+      { symbol },
+    );
+  }
+
+  async clearDelegatedRecordReaction(
+    grantId: string,
+    record: string,
+  ): Promise<OrbitMcpMutationResult> {
+    return this.#request<unknown>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/records/${encodeURIComponent(record)}/reaction`,
+      {},
+      undefined,
+      "DELETE",
+    );
+  }
+
   async listDelegatedOwnRecords(grantId: string, input: OrbitOwnRecordListInput): Promise<unknown> {
     return this.#post<unknown>(
       `/v1/mcp/grants/${encodeURIComponent(grantId)}/agent/records`,
@@ -506,6 +531,7 @@ export class OrbitMcpApi {
     path: string,
     body: unknown,
     idempotencyKey?: string,
+    method: "POST" | "DELETE" = "POST",
   ): Promise<ParsedServiceResponse<T>> {
     const headers = new Headers({
       authorization: `Bearer ${this.#serviceSecret}`,
@@ -514,7 +540,7 @@ export class OrbitMcpApi {
     });
     if (idempotencyKey) headers.set("idempotency-key", idempotencyKey);
     const request = new Request(`${ORBIT_ORIGIN}${path}`, {
-      method: "POST",
+      method,
       headers,
       body: JSON.stringify(body),
       redirect: "manual",

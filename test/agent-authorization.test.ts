@@ -8,8 +8,8 @@ const validProps = {
   accountId: "account-123",
   agentId: "agent-selene",
   handle: "selene",
-  scopes: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
-  scopeBundleVersion: 2,
+  scopes: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
+  scopeBundleVersion: 3,
 };
 
 test("accepts the token-bound current Orbit permission bundle", () => {
@@ -17,6 +17,11 @@ test("accepts the token-bound current Orbit permission bundle", () => {
 });
 
 test("accepts historical OAuth permission snapshots without reauthorization", () => {
+  const historicalV2Scopes = ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"];
+  assert.deepEqual(
+    readOrbitOAuthProps({ ...validProps, scopes: historicalV2Scopes, scopeBundleVersion: 2 }),
+    { ...validProps, scopes: historicalV2Scopes, scopeBundleVersion: 2 },
+  );
   assert.deepEqual(
     readOrbitOAuthProps({ ...validProps, scopes: ["feed:read"], scopeBundleVersion: 1 }),
     { ...validProps, scopes: ["feed:read"], scopeBundleVersion: 1 },

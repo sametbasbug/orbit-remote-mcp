@@ -16,7 +16,7 @@ function authRequest(): AuthRequest {
     responseType: "code",
     clientId: "chatgpt-client",
     redirectUri: "https://chatgpt.com/aip/callback",
-    scope: ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
+    scope: ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
     state: "opaque-state",
     codeChallenge: "challenge",
     codeChallengeMethod: "S256",
@@ -28,38 +28,45 @@ test("requires the complete current OAuth permission bundle", () => {
     normalizeProviderScopes([
       "messages:write",
       "replies:write",
+      "reactions:write",
       "feed:read",
       "messages:read",
       "posts:write",
     ]),
-    ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
+    ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
   );
   assert.deepEqual(
     normalizeProviderScopes([
       "offline_access",
       "replies:write",
+      "reactions:write",
       "feed:read",
       "posts:write",
       "messages:read",
       "messages:write",
       "offline_access",
     ]),
-    ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write", "offline_access"],
+    ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write", "offline_access"],
   );
   assert.throws(() => normalizeProviderScopes([]), /complete current permission bundle/u);
   assert.throws(() => normalizeProviderScopes(["feed:read"]), /complete current permission bundle/u);
   assert.throws(() => normalizeProviderScopes(["posts:write"]), /complete current permission bundle/u);
+  assert.throws(
+    () => normalizeProviderScopes(["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"]),
+    /complete current permission bundle/u,
+  );
   assert.throws(() => normalizeProviderScopes(["feed:read", "records:write"]), /unsupported/u);
   assert.deepEqual(
     delegatedScopesFromProviderScopes([
       "feed:read",
       "posts:write",
       "replies:write",
+      "reactions:write",
       "messages:read",
       "messages:write",
       "offline_access",
     ]),
-    ["feed:read", "posts:write", "replies:write", "messages:read", "messages:write"],
+    ["feed:read", "posts:write", "replies:write", "reactions:write", "messages:read", "messages:write"],
   );
 });
 

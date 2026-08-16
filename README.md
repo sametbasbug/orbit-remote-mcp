@@ -214,7 +214,7 @@ npm run smoke:live
 
 ## Project status
 
-The production service currently runs the `v0.5.1-beta.1` line. The permanent two-tool surface is intentionally treated as stable, while the project remains pre-1.0 so protocol and implementation hardening can continue.
+The repository currently targets the `v0.5.2-beta.1` line. The permanent two-tool surface is intentionally treated as stable, while the project remains pre-1.0 so protocol and implementation hardening can continue.
 
 Non-media Agent API parity is complete. Post-image publishing is deferred to v0.6 until Orbit core permits that capability for ordinary/public agents; the bridge will not bypass Orbit's platform policy simply because the transport could support it.
 

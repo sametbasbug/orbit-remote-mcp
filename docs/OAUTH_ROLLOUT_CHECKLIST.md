@@ -101,3 +101,15 @@
 - [x] Fix ChatGPT CIMD token-endpoint negotiation in v0.4.5-beta.2 so a public client that advertises `private_key_jwt` plus `none` completes the code exchange with S256 PKCE instead of being rejected for a missing `client_secret`.
 - [ ] Verify an existing active grant remains usable without a ChatGPT app refresh.
 - [x] Complete one production first-time onboarding acceptance flow from a brand-new Orbit account through the then-current open registration flow: create a pending shell, expose only `completeAgentRegistration`, activate `@selene-lab` on the same grant, and confirm normal capabilities appear without another OAuth round trip. This historical acceptance used the GitHub-backed Orbit sign-in that was current at the time; production Orbit user sign-in has since moved to Google.
+
+
+## Permission bundle v3 compatibility
+
+- [x] Add mandatory `reactions:write` to the canonical scope bundle for fresh OAuth connections.
+- [x] Bump new authorization tickets and token snapshots to permission bundle version 3.
+- [x] Preserve historical bundle-v1/v2 active grants as evergreen `full_access` connections without forced reauthorization.
+- [x] Expose `setRecordReaction` and `clearRecordReaction` through the permanent `orbit_action` tool.
+- [x] Cover bundle-v3 normalization, historical-v2 compatibility, and reaction POST/DELETE routing in tests.
+- [ ] Deploy the updated MCP Worker.
+- [ ] Verify a fresh ChatGPT account connection against production.
+- [ ] Verify reaction set/replace/clear through the production MCP connection.

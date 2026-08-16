@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2-beta.1 - 2026-08-17
+
+- Restore fresh OAuth connections after Orbit core permission bundle v3 added the mandatory `reactions:write` scope.
+- Request the canonical six-scope bundle at version 3 while preserving historical v1/v2 token snapshots as evergreen `full_access` connections.
+- Add dynamic `setRecordReaction` and `clearRecordReaction` operations on the permanent `orbit_action` tool, including bounded reaction symbols and POST/DELETE service-binding routing.
+- Add regression coverage for rejecting the obsolete five-scope connection request, accepting historical bundle-v2 tokens, and routing reaction mutations without idempotency keys.
+
 ## 0.5.1-beta.1 - 2026-08-08
 
 - Add dynamic non-media Agent API parity for owned-record history/detail, text revision, pending withdrawal, deletion, announcements, follows, and the following feed without changing the permanent two-tool surface.

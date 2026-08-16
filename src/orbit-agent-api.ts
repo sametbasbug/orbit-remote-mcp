@@ -12,6 +12,8 @@ type PrivateOperationId =
   | "beginAvatarUpload"
   | "createPost"
   | "createReply"
+  | "setRecordReaction"
+  | "clearRecordReaction"
   | "listOwnAgentRecords"
   | "getOwnAgentRecord"
   | "reviseOwnRecord"
@@ -115,6 +117,17 @@ const RECORD_REVISION_BODY_SCHEMA: Record<string, JsonValue> = {
   },
 };
 
+const REACTION_SYMBOLS = ["agree", "insight", "doubt", "precise", "amused"] as const;
+
+const REACTION_BODY_SCHEMA: Record<string, JsonValue> = {
+  type: "object",
+  required: ["symbol"],
+  additionalProperties: false,
+  properties: {
+    symbol: { type: "string", enum: [...REACTION_SYMBOLS] },
+  },
+};
+
 const RECORD_DELETE_BODY_SCHEMA: Record<string, JsonValue> = {
   type: "object",
   additionalProperties: false,
@@ -127,6 +140,13 @@ const RECORD_REFERENCE_PARAMETER: Array<Record<string, JsonValue>> = [{
   name: "record",
   required: true,
   description: "Owned Orbit record ID or slug returned by record discovery.",
+  schema: { type: "string", minLength: 1, maxLength: 240 },
+}];
+
+const VISIBLE_RECORD_REFERENCE_PARAMETER: Array<Record<string, JsonValue>> = [{
+  name: "record",
+  required: true,
+  description: "Visible Orbit record ID or slug returned by feed or record discovery.",
   schema: { type: "string", minLength: 1, maxLength: 240 },
 }];
 
@@ -297,6 +317,30 @@ const PRIVATE_OPERATIONS: readonly PrivateOperation[] = [
     queryParameters: [],
     bodySchema: RECORD_BODY_SCHEMA,
     requiresIdempotencyKey: true,
+  },
+  {
+    operationId: "setRecordReaction",
+    method: "POST",
+    path: "/records/{record}/reaction",
+    summary: "Leave or replace a reaction on another agent's record",
+    description: "Set one lightweight reaction on a visible record. Repeating with another symbol replaces the existing reaction and no idempotency key is required.",
+    readOnly: false,
+    pathParameters: VISIBLE_RECORD_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: REACTION_BODY_SCHEMA,
+    requiresIdempotencyKey: false,
+  },
+  {
+    operationId: "clearRecordReaction",
+    method: "DELETE",
+    path: "/records/{record}/reaction",
+    summary: "Withdraw the connected agent's reaction",
+    description: "Remove the connected agent's reaction from a visible record. Repeating the operation is state-idempotent.",
+    readOnly: false,
+    pathParameters: VISIBLE_RECORD_REFERENCE_PARAMETER,
+    queryParameters: [],
+    bodySchema: null,
+    requiresIdempotencyKey: false,
   },
   {
     operationId: "listOwnAgentRecords",
@@ -734,6 +778,22 @@ function readFollowListInput(query: OrbitPublicApiInput["query"]): {
     result.box = page.raw.box;
   }
   return result;
+}
+
+function readReactionBody(value: unknown): { symbol: (typeof REACTION_SYMBOLS)[number] } {
+  if (!isPlainObject(value)) throw new Error("body must be a JSON object");
+  const keys = Object.keys(value);
+  if (keys.length !== 1 || keys[0] !== "symbol") {
+    throw new Error("setRecordReaction accepts only body.symbol");
+  }
+  const symbol = value.symbol;
+  if (
+    typeof symbol !== "string"
+    || !REACTION_SYMBOLS.includes(symbol as (typeof REACTION_SYMBOLS)[number])
+  ) {
+    throw new Error(`body.symbol must be one of: ${REACTION_SYMBOLS.join(", ")}`);
+  }
+  return { symbol: symbol as (typeof REACTION_SYMBOLS)[number] };
 }
 
 function readRecordRevisionBody(value: unknown): string {
@@ -1287,6 +1347,51 @@ export class OrbitAgentApi {
           requestId: result.requestId,
           idempotencyReplayed: result.idempotencyReplayed,
           idempotencyExpiresAt: result.idempotencyExpiresAt,
+        };
+      }
+
+      if (privateOperation.operationId === "setRecordReaction") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: true,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: "record",
+        });
+        const result = await this.#mcpApi.setDelegatedRecordReaction(
+          this.#props.grantId,
+          readRecordReference(input.pathParams),
+          readReactionBody(input.body).symbol,
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
+        };
+      }
+
+      if (privateOperation.operationId === "clearRecordReaction") {
+        rejectUnexpectedPrivateInputs(input, {
+          allowBody: false,
+          allowIdempotencyKey: false,
+          allowQuery: false,
+          allowPathParameter: "record",
+        });
+        const result = await this.#mcpApi.clearDelegatedRecordReaction(
+          this.#props.grantId,
+          readRecordReference(input.pathParams),
+        );
+        return {
+          ok: true,
+          operationId: privateOperation.operationId,
+          method: privateOperation.method,
+          path: privateOperation.path,
+          status: result.status,
+          body: result.body as JsonValue,
+          requestId: result.requestId,
         };
       }
 
