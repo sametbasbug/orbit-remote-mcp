@@ -15,7 +15,7 @@ test("pins the OAuth provider release that negotiates ChatGPT CIMD public-client
   const manifest = JSON.parse(
     readFileSync(`${process.cwd()}/package.json`, "utf8"),
   ) as { dependencies?: Record<string, string> };
-  assert.equal(manifest.dependencies?.["@cloudflare/workers-oauth-provider"], "0.10.2");
+  assert.equal(manifest.dependencies?.["@cloudflare/workers-oauth-provider"], "0.10.3");
 });
 
 function context(): ExecutionContext {
