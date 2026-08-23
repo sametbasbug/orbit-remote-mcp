@@ -1,5 +1,10 @@
 import type { OrbitOAuthProps } from "./oauth-types";
-import { OrbitMcpApi, type OrbitDelegatedAgentStateResponse } from "./orbit-mcp-api";
+import {
+  OrbitMcpApi,
+  type OrbitConnectedSiteCatalogResponse,
+  type OrbitConnectedSiteOperation,
+  type OrbitDelegatedAgentStateResponse,
+} from "./orbit-mcp-api";
 import { OrbitPublicApi, type JsonValue, type OrbitPublicApiInput, type OrbitPublicApiResult } from "./orbit-public-api";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
@@ -597,6 +602,103 @@ function privateOperationDescription(operation: PrivateOperation): Record<string
   };
 }
 
+type ConnectedSite = OrbitConnectedSiteCatalogResponse["sites"][number];
+
+interface ConnectedSiteOperationMatch {
+  site: ConnectedSite;
+  operation: OrbitConnectedSiteOperation;
+}
+
+function connectedSiteOperationDescription(
+  site: ConnectedSite,
+  operation: OrbitConnectedSiteOperation,
+): Record<string, JsonValue> {
+  return {
+    operationId: operation.operationId,
+    method: "POST",
+    path: "/connected-sites/{grantId}/actions",
+    summary: operation.summary,
+    description:
+      `Action exposed by the connected site ${site.label}. Orbit revalidates the live site grant, current catalog and input schema before forwarding the call.`,
+    operationType: "connected_site_action",
+    readOnly: null,
+    readOnlyClassification: "not_declared_by_site_catalog",
+    authentication: "Active Orbit OAuth grant plus a live person-approved connected-site grant",
+    authorizationMode: "full_access",
+    tool: "orbit_action",
+    connectedSite: {
+      grantId: site.grantId,
+      clientId: site.clientId,
+      label: site.label,
+      siteUrl: site.siteUrl,
+      catalogFetchedAt: site.catalogFetchedAt,
+    },
+    pathParameters: [{
+      name: "grantId",
+      required: true,
+      description:
+        "Connected-site grant identifier returned by Orbit discovery. Reuse this exact value; it is not the OAuth grant ID.",
+      schema: { type: "string", minLength: 1, maxLength: 200 },
+    }],
+    queryParameters: [],
+    requestBody: operation.input as JsonValue,
+    responseBody: operation.output as JsonValue,
+    siteOperationIdempotent: operation.idempotent,
+    idempotencyKey: {
+      required: true,
+      minLength: 1,
+      maxLength: 128,
+      description:
+        "Supply a printable ASCII key for every connected-site call. Reuse it only when retrying the exact same uncertain intent.",
+    },
+  };
+}
+
+function connectedSiteOperationMatches(
+  catalog: OrbitConnectedSiteCatalogResponse,
+  operationId: string,
+): ConnectedSiteOperationMatch[] {
+  return catalog.sites.flatMap((site) => site.operations
+    .filter((operation) => operation.operationId === operationId)
+    .map((operation) => ({ site, operation })));
+}
+
+function resolveConnectedSiteOperation(
+  catalog: OrbitConnectedSiteCatalogResponse,
+  operationId: string,
+  pathParams: OrbitPublicApiInput["pathParams"],
+  requireGrantId: boolean,
+): ConnectedSiteOperationMatch | null {
+  const keys = pathParameterKeys(pathParams);
+  if (keys.length > 0 && (keys.length !== 1 || keys[0] !== "grantId")) {
+    throw new Error("Connected-site operations accept only pathParams.grantId");
+  }
+  const matches = connectedSiteOperationMatches(catalog, operationId);
+  const requestedGrantId = pathParams?.grantId;
+  if (requestedGrantId !== undefined) {
+    if (typeof requestedGrantId !== "string" || requestedGrantId.length < 1 || requestedGrantId.length > 200) {
+      throw new Error("pathParams.grantId must be a connected-site grant identifier returned by Orbit discovery");
+    }
+    return matches.find(
+      (match) => match.site.grantId === requestedGrantId,
+    ) ?? null;
+  }
+  if (matches.length === 0) return null;
+  if (requireGrantId) {
+    throw new Error("pathParams.grantId is required for connected-site actions");
+  }
+  if (matches.length > 1) {
+    throw new Error("This connected-site operation is exposed by multiple grants; specify pathParams.grantId from orbit_read action=list");
+  }
+  return matches[0] ?? null;
+}
+
+function readConnectedSiteBody(value: unknown): Record<string, unknown> {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) throw new Error("Connected-site action body must be a JSON object");
+  return value;
+}
+
 function readIdempotencyKey(value: unknown): string {
   if (
     typeof value !== "string"
@@ -1095,13 +1197,44 @@ export class OrbitAgentApi {
     const privateOperation = PRIVATE_OPERATIONS.find(
       (operation) => operation.operationId === input.operationId,
     );
-    if (!privateOperation) {
-      throw new Error(`Unknown or read-only Orbit action: ${input.operationId}. Use orbit_read to discover the current operation catalog.`);
-    }
-    if (privateOperation.readOnly) {
+    if (privateOperation?.readOnly) {
       throw new Error(`Use orbit_read for read-only operation: ${input.operationId}`);
     }
-    return this.run({ ...input, action: "call" });
+    if (privateOperation) return this.run({ ...input, action: "call" });
+
+    const catalog = await this.#mcpApi.listDelegatedConnectedSiteActions(this.#props.grantId);
+    const connected = resolveConnectedSiteOperation(
+      catalog,
+      input.operationId,
+      input.pathParams,
+      true,
+    );
+    if (!connected) {
+      throw new Error(`Unknown or read-only Orbit action: ${input.operationId}. Use orbit_read to discover the current operation catalog.`);
+    }
+    rejectPrivateQuery(input.query);
+    const body = readConnectedSiteBody(input.body);
+    const result = await this.#mcpApi.performDelegatedConnectedSiteAction(
+      this.#props.grantId,
+      connected.site.grantId,
+      connected.operation.operationId,
+      body,
+      readIdempotencyKey(input.idempotencyKey),
+    );
+    return {
+      ok: true,
+      operationId: connected.operation.operationId,
+      method: "POST",
+      path: "/connected-sites/{grantId}/actions",
+      status: 200,
+      connectedSite: {
+        grantId: connected.site.grantId,
+        clientId: connected.site.clientId,
+        label: connected.site.label,
+        siteUrl: connected.site.siteUrl,
+      },
+      body: result as unknown as JsonValue,
+    };
   }
 
   async run(input: OrbitAgentApiInput): Promise<OrbitPublicApiResult> {
@@ -1160,6 +1293,9 @@ export class OrbitAgentApi {
     }
 
     if (action === "list") {
+      const connectedSiteCatalog = await this.#mcpApi.listDelegatedConnectedSiteActions(
+        this.#props.grantId,
+      );
       const publicResult = await this.#publicApi.run({
         action: "list",
         refreshContract: input.refreshContract,
@@ -1173,7 +1309,13 @@ export class OrbitAgentApi {
         ...privateOperationDescription(operation),
         action: "call",
       }));
-      const operations = [...publicOperations, ...privateOperations].sort(
+      const connectedSiteOperations = connectedSiteCatalog.sites.flatMap((site) => (
+        site.operations.map((operation) => ({
+          ...connectedSiteOperationDescription(site, operation),
+          action: "call",
+        }))
+      ));
+      const operations = [...publicOperations, ...privateOperations, ...connectedSiteOperations].sort(
         (left, right) => operationIdOf(left).localeCompare(operationIdOf(right)),
       );
       return {
@@ -1717,6 +1859,37 @@ export class OrbitAgentApi {
         idempotencyReplayed: result.idempotencyReplayed,
         idempotencyExpiresAt: result.idempotencyExpiresAt,
       };
+    }
+
+    if (input.operationId.includes(".")) {
+      const connectedSiteCatalog = await this.#mcpApi.listDelegatedConnectedSiteActions(
+        this.#props.grantId,
+      );
+      const connected = resolveConnectedSiteOperation(
+        connectedSiteCatalog,
+        input.operationId,
+        input.pathParams,
+        false,
+      );
+      if (connected) {
+        if (action === "call") {
+          throw new Error(`Use orbit_action for connected-site operation: ${input.operationId}`);
+        }
+        if (action === "describe") {
+          rejectPrivateQuery(input.query);
+          if (input.body !== undefined) {
+            throw new Error("action=describe does not accept a request body");
+          }
+          if (input.idempotencyKey !== undefined) {
+            throw new Error("action=describe does not accept idempotencyKey");
+          }
+          return {
+            ok: true,
+            action,
+            ...connectedSiteOperationDescription(connected.site, connected.operation),
+          };
+        }
+      }
     }
 
     const publicResult = await this.#publicApi.run({

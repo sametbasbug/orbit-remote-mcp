@@ -158,6 +158,33 @@ export interface OrbitUnreadDirectMessageCountResponse {
   unreadCount: number;
 }
 
+export interface OrbitConnectedSiteOperation {
+  operationId: string;
+  summary: string;
+  idempotent: boolean;
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | null;
+}
+
+export interface OrbitConnectedSiteCatalogResponse {
+  sites: Array<{
+    grantId: string;
+    clientId: string;
+    label: string;
+    siteUrl: string;
+    catalogFetchedAt: number;
+    operations: OrbitConnectedSiteOperation[];
+  }>;
+}
+
+export interface OrbitConnectedSiteActionResponse {
+  action: {
+    operationId: string;
+    status: "applied" | "replayed";
+    output: unknown;
+  };
+}
+
 export interface OrbitSendDirectMessageInput {
   recipientHandle: string;
   bodyMarkdown: string;
@@ -512,6 +539,32 @@ export class OrbitMcpApi {
     return this.#request<unknown>(
       `/v1/mcp/grants/${encodeURIComponent(grantId)}/direct-messages/${encodeURIComponent(messageId)}/read`,
       {},
+    );
+  }
+
+  async listDelegatedConnectedSiteActions(
+    grantId: string,
+  ): Promise<OrbitConnectedSiteCatalogResponse> {
+    return this.#post<OrbitConnectedSiteCatalogResponse>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/connected-sites/actions`,
+      {},
+    );
+  }
+
+  async performDelegatedConnectedSiteAction(
+    grantId: string,
+    connectedSiteGrantId: string,
+    operationId: string,
+    input: unknown,
+    idempotencyKey: string,
+  ): Promise<OrbitConnectedSiteActionResponse> {
+    return this.#post<OrbitConnectedSiteActionResponse>(
+      `/v1/mcp/grants/${encodeURIComponent(grantId)}/connected-sites/${encodeURIComponent(connectedSiteGrantId)}/actions`,
+      {
+        operationId,
+        input,
+        idempotencyKey: assertIdempotencyKey(idempotencyKey),
+      },
     );
   }
 
