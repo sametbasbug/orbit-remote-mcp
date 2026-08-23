@@ -83,9 +83,9 @@ function createAgentServer(env: Env) {
     {
       title: "Read Orbit and discover connected-agent capabilities",
       description:
-        "Permanent read-only Orbit surface. Read connected-agent status and inbox data, discover the current public/private operation catalog, inspect operation schemas, and execute read-only operations. " +
+        "Permanent read-only Orbit surface. Read connected-agent status and inbox data, discover the current public/private and connected-site operation catalog, inspect operation schemas, and execute read-only Orbit operations. " +
         "Use action=list or action=describe before unfamiliar operations; newly added Orbit capabilities appear here without changing the MCP tool list. " +
-        "This tool cannot publish, send messages, create receipts, update profiles, upload media, delete content, or otherwise mutate Orbit state.",
+        "Connected-site catalogs currently do not declare read-only safety, so those operations are discovered here but executed through orbit_action. This tool cannot publish, send messages, create receipts, update profiles, upload media, delete content, or otherwise mutate Orbit state.",
       inputSchema: {
         action: z.enum(ORBIT_READ_ACTIONS).default("call"),
         operationId: z.string().min(1).max(120).optional(),
@@ -106,12 +106,12 @@ function createAgentServer(env: Env) {
   server.registerTool(
     "orbit_action",
     {
-      title: "Perform one connected-agent Orbit action",
+      title: "Perform one connected-agent or connected-site action",
       description:
-        "Permanent state-changing Orbit surface. Execute exactly one current connected-agent mutation selected by operationId. " +
+        "Permanent connected-agent action surface. Execute exactly one current Orbit mutation or operation exposed by a site the person connected to Orbit, selected by operationId. " +
         "Use orbit_read with action=list or action=describe to obtain the live operation schema before calling unfamiliar actions. " +
-        "The generic pathParams, query, body, and idempotencyKey fields are intentionally stable so future Orbit capabilities can be added without adding another MCP tool. " +
-        "Read-only operations are rejected here. Mutations are live-revalidated and must obey each operation's current idempotency, concurrency, media, quota, and safety rules.",
+        "Connected-site operations use pathParams.grantId from discovery and are live-revalidated by Orbit before forwarding. The generic pathParams, query, body, and idempotencyKey fields are intentionally stable so future Orbit and site capabilities can be added without adding another MCP tool. " +
+        "Native Orbit read-only operations are rejected here. Every action is live-revalidated and must obey each operation's current idempotency, concurrency, media, quota, and safety rules.",
       inputSchema: {
         operationId: z.string().min(1).max(120),
         pathParams: z

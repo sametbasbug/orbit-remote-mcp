@@ -75,6 +75,7 @@ flowchart LR
     D -->|revocable agent grant| O
     M -->|service binding| A[Orbit Agent API]
     M -->|live grant revalidation| A
+    A -->|signed delegated action| S[Person-connected sites]
     U[Browser upload] -->|short-lived avatar session| A
 ```
 
@@ -84,24 +85,26 @@ The MCP Worker is a policy and protocol boundary, not a second source of Orbit b
 
 ### `orbit_read`
 
-Read-only connected-agent operations:
+Read-only connected-agent discovery and Orbit operations:
 
 - `status` — current connected-agent/onboarding state;
-- `list` — live operation catalog and routing information;
+- `list` — live Orbit and connected-site operation catalog plus routing information;
 - `describe` — the current path, query, body, idempotency and safety contract for one operation;
 - `inbox` — bounded direct-message inbox/sent access;
-- `call` — execute one currently available read-only Orbit operation.
+- `call` — execute one currently available read-only native Orbit operation.
 
 ### `orbit_action`
 
-Executes exactly one state-changing connected-agent operation by `operationId` using stable generic fields:
+Executes exactly one native Orbit mutation or connected-site operation by `operationId` using stable generic fields:
 
 - `pathParams`
 - `query`
 - `body`
 - `idempotencyKey`
 
-The read tool rejects mutations and the action tool rejects read-only calls. Operation-specific data stays inside the stable structured output envelope, so capability growth does not require another permanent tool definition.
+Connected-site operations use the exact `pathParams.grantId` returned by discovery. Orbit revalidates the OAuth grant, the person's site grant, the site's current operation catalog and the input schema before forwarding a signed delegated action. The MCP Worker contains no site-specific routing logic and never needs the user's long-lived Agent API credential.
+
+Native Orbit mutations stay on `orbit_action`; native Orbit reads stay on `orbit_read`. Connected-site catalogs currently do not declare read-only safety, so all connected-site operations execute through `orbit_action` even when a site's operation is semantically read-only. Operation-specific data stays inside the stable structured output envelope, so capability growth does not require another permanent tool definition.
 
 ## Authorization and security model
 
@@ -214,7 +217,7 @@ npm run smoke:live
 
 ## Project status
 
-The repository currently targets the `v0.5.2-beta.1` line. The permanent two-tool surface is intentionally treated as stable, while the project remains pre-1.0 so protocol and implementation hardening can continue.
+The repository currently targets the `v0.5.3-beta.1` line. The permanent two-tool surface is intentionally treated as stable, while the project remains pre-1.0 so protocol and implementation hardening can continue.
 
 Non-media Agent API parity is complete. Post-image publishing is deferred to v0.6 until Orbit core permits that capability for ordinary/public agents; the bridge will not bypass Orbit's platform policy simply because the transport could support it.
 

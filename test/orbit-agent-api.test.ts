@@ -170,6 +170,9 @@ test("requires explicit scope and idempotency for text-only post creation", asyn
         if (new URL(request.url).pathname.endsWith("/agent/state")) {
           return jsonResponse(state(scopes));
         }
+        if (new URL(request.url).pathname.endsWith("/connected-sites/actions")) {
+          return jsonResponse({ sites: [] });
+        }
         return jsonResponse(
           { record: { id: "post-1", lifecycleState: "published" } },
           {
@@ -285,6 +288,7 @@ test("routes record reactions through the stable action tool", async () => {
         calls.push(request);
         const path = new URL(request.url).pathname;
         if (path.endsWith("/agent/state")) return jsonResponse(state(scopes));
+        if (path.endsWith("/connected-sites/actions")) return jsonResponse({ sites: [] });
         if (path.endsWith("/reaction") && request.method === "POST") {
           return jsonResponse(
             { recordId: "root/unsafe", symbol: "insight", replaced: null },
@@ -373,6 +377,9 @@ test("supports the full bundle and revalidates revocation before every action", 
                 { status: 401 },
               )
             : jsonResponse(state(scopes));
+        }
+        if (new URL(request.url).pathname.endsWith("/connected-sites/actions")) {
+          return jsonResponse({ sites: [] });
         }
         return jsonResponse(
           { record: { id: "reply-1", lifecycleState: "published" } },
@@ -679,6 +686,7 @@ test("reads and updates the connected profile through dynamic operations with op
             },
           });
         }
+        if (path.endsWith("/connected-sites/actions")) return jsonResponse({ sites: [] });
         return jsonResponse({ error: { code: "not_found", message: "Not found" } }, { status: 404 });
       }),
     }),
@@ -1067,4 +1075,118 @@ test("completes MCP-native onboarding without changing the permanent tool surfac
     ),
   );
   assert.ok(calls.some((request) => new URL(request.url).pathname.endsWith("/agent/onboarding/complete")));
+});
+
+test("discovers and routes generic connected-site operations without site-specific code", async () => {
+  const scopes: OrbitGrantScope[] = [
+    "feed:read",
+    "posts:write",
+    "replies:write",
+    "reactions:write",
+    "messages:read",
+    "messages:write",
+  ];
+  const calls: Request[] = [];
+  const catalog = {
+    sites: [{
+      grantId: "site-grant-1",
+      clientId: "example-lists",
+      label: "Example Lists",
+      siteUrl: "https://lists.example",
+      catalogFetchedAt: 123,
+      operations: [{
+        operationId: "demo.listItems",
+        summary: "List items",
+        idempotent: true,
+        input: {
+          type: "object",
+          additionalProperties: false,
+          properties: {},
+        },
+        output: {
+          type: "object",
+          properties: {
+            items: { type: "array", items: { type: "string" } },
+          },
+        },
+      }],
+    }],
+  };
+  const api = new OrbitAgentApi(
+    publicApi(),
+    new OrbitMcpApi({
+      ORBIT_MCP_SERVICE_SECRET_V1: SERVICE_SECRET,
+      ORBIT_SERVICE: service(async (request) => {
+        calls.push(request);
+        const path = new URL(request.url).pathname;
+        if (path.endsWith("/agent/state")) return jsonResponse(state(scopes));
+        if (path.endsWith("/connected-sites/actions")) return jsonResponse(catalog);
+        if (path.endsWith("/connected-sites/site-grant-1/actions")) {
+          assert.deepEqual(await request.clone().json(), {
+            operationId: "demo.listItems",
+            input: {},
+            idempotencyKey: "site-action-1",
+          });
+          return jsonResponse({
+            action: {
+              operationId: "demo.listItems",
+              status: "applied",
+              output: { items: ["one"] },
+            },
+          });
+        }
+        return jsonResponse({ error: { code: "not_found", message: "Not found" } }, { status: 404 });
+      }),
+    }),
+    props(scopes),
+  );
+
+  const listed = await api.runRead({ action: "list" });
+  const connected = (listed.operations as Array<Record<string, unknown>>).find(
+    (operation) => operation.operationId === "demo.listItems",
+  );
+  assert.equal(connected?.tool, "orbit_action");
+  assert.equal(connected?.readOnly, null);
+  assert.equal((connected?.connectedSite as { grantId: string }).grantId, "site-grant-1");
+  assert.equal((connected?.idempotencyKey as { required: boolean }).required, true);
+
+  const described = await api.runRead({ action: "describe", operationId: "demo.listItems" });
+  assert.equal(described.tool, "orbit_action");
+  assert.equal((described.connectedSite as { label: string }).label, "Example Lists");
+
+  await assert.rejects(
+    () => api.runRead({
+      action: "call",
+      operationId: "demo.listItems",
+      pathParams: { grantId: "site-grant-1" },
+    }),
+    /Use orbit_action for connected-site operation/u,
+  );
+  await assert.rejects(
+    () => api.runAction({ operationId: "demo.listItems", idempotencyKey: "missing-grant" }),
+    /pathParams\.grantId is required/u,
+  );
+  await assert.rejects(
+    () => api.runAction({
+      operationId: "demo.listItems",
+      pathParams: { grantId: "site-grant-1" },
+      query: { unexpected: true },
+      idempotencyKey: "query-rejected",
+    }),
+    /does not accept query parameters/u,
+  );
+
+  const result = await api.runAction({
+    operationId: "demo.listItems",
+    pathParams: { grantId: "site-grant-1" },
+    body: {},
+    idempotencyKey: "site-action-1",
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, {
+    action: { operationId: "demo.listItems", status: "applied", output: { items: ["one"] } },
+  });
+  const actionCall = calls.find((request) => new URL(request.url).pathname.endsWith("/connected-sites/site-grant-1/actions"));
+  assert.ok(actionCall);
+  assert.equal(actionCall.headers.get("authorization"), `Bearer ${SERVICE_SECRET}`);
 });

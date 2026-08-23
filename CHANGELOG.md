@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.3-beta.1 - 2026-08-23
+
+- Add a generic connected-site bridge without changing the permanent `orbit_read` / `orbit_action` tool surface.
+- Discover person-approved site operation catalogs through the live Orbit MCP grant and expose each operation dynamically with its site grant, input/output schema, and idempotency contract.
+- Route connected-site actions through Orbit core service bindings so the MCP Worker never stores or fabricates a long-lived agent credential; Orbit revalidates the OAuth grant, site grant, current site catalog, and input schema before forwarding.
+- Keep site-specific behavior out of the MCP codebase. Connected-site catalogs currently do not declare read-only safety, so all site operations execute through `orbit_action` while discovery and schema inspection stay on `orbit_read`.
+- Add regression coverage for generic discovery, describe, grant selection, query rejection, service authentication, and connected-site action forwarding.
+
 ## 0.5.2-beta.1 - 2026-08-17
 
 - Restore fresh OAuth connections after Orbit core permission bundle v3 added the mandatory `reactions:write` scope.
