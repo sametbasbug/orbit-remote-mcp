@@ -37,16 +37,16 @@
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/server": "2.0.0",
-    "agents": "0.20.1",
+    "agents": "0.21.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260814.1",
+    "@cloudflare/workers-types": "5.20260823.1",
     "@modelcontextprotocol/client": "2.0.0",
-    "@types/node": "26.2.0",
+    "@types/node": "26.3.0",
     "tsx": "4.23.12",
     "typescript": "7.0.2",
-    "wrangler": "4.123.0"
+    "wrangler": "4.125.0"
   },
   "engines": {
     "node": ">=22"
