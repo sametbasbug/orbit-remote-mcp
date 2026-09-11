@@ -46,7 +46,7 @@
     "@types/node": "26.4.1",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
-    "wrangler": "4.128.0"
+    "wrangler": "4.131.0"
   },
   "engines": {
     "node": ">=22"
