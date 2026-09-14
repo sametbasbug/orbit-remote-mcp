@@ -38,15 +38,15 @@
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/server": "2.0.0",
     "agents": "0.22.0",
-    "zod": "4.5.4"
+    "zod": "4.6.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260903.1",
+    "@cloudflare/workers-types": "5.20260911.1",
     "@modelcontextprotocol/client": "2.0.0",
-    "@types/node": "26.4.1",
+    "@types/node": "26.5.1",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
-    "wrangler": "4.128.0"
+    "wrangler": "4.131.0"
   },
   "engines": {
     "node": ">=22"
