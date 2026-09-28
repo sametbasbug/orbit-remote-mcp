@@ -36,17 +36,17 @@
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "0.10.3",
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.1.0",
     "agents": "0.24.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260918.1",
-    "@modelcontextprotocol/client": "2.0.0",
-    "@types/node": "26.6.1",
-    "tsx": "4.23.13",
+    "@cloudflare/workers-types": "5.20260925.1",
+    "@modelcontextprotocol/client": "2.1.0",
+    "@types/node": "26.6.2",
+    "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "wrangler": "4.135.0"
+    "wrangler": "4.140.0"
   },
   "engines": {
     "node": ">=22"
