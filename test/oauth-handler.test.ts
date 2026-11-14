@@ -11,11 +11,20 @@ import type { Env } from "../src/oauth-types";
 
 const SERVICE_SECRET = "test-service-secret-at-least-32-bytes-long";
 
-test("pins the OAuth provider release that negotiates ChatGPT CIMD public-client auth", () => {
+test("keeps a verified OAuth 1.x provider with ChatGPT CIMD public-client auth", () => {
   const manifest = JSON.parse(
     readFileSync(`${process.cwd()}/package.json`, "utf8"),
   ) as { dependencies?: Record<string, string> };
-  assert.equal(manifest.dependencies?.["@cloudflare/workers-oauth-provider"], "0.10.3");
+  const version = manifest.dependencies?.["@cloudflare/workers-oauth-provider"] ?? "";
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  const [major, minor, patch] = version.split(".").map(Number);
+  assert.equal(major, 1, "OAuth major upgrades require a fresh compatibility review");
+  assert.ok(minor > 2 || (minor === 2 && patch >= 4), "Use a release with tested CIMD and PKCE behavior");
+
+  const wranglerConfig = JSON.parse(readFileSync(`${process.cwd()}/wrangler.jsonc`, "utf8")) as {
+    compatibility_flags?: string[];
+  };
+  assert.ok(wranglerConfig.compatibility_flags?.includes("global_fetch_strictly_public"));
 });
 
 function context(): ExecutionContext {

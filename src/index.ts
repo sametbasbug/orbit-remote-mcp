@@ -18,13 +18,12 @@ const oauthProvider = new OAuthProvider<Env>({
   tokenEndpoint: "/oauth/token",
   clientRegistrationEndpoint: "/oauth/register",
   scopesSupported: [...ORBIT_GRANT_SCOPES, "offline_access"],
-  allowPlainPKCE: false,
-  allowImplicitFlow: false,
+  // OAuth 1.2 enforces authorization code + S256 PKCE; implicit and plain are no longer supported.
   clientIdMetadataDocumentEnabled: true,
+  requiredScopes: [...ORBIT_GRANT_SCOPES],
   resourceMetadata: {
     resource: PRIMARY_MCP_URL,
     authorization_servers: [PRIMARY_ORIGIN],
-    scopes_supported: [...ORBIT_GRANT_SCOPES],
     bearer_methods_supported: ["header"],
     resource_name: SERVICE_DISPLAY_NAME,
   },
@@ -44,9 +43,18 @@ export default {
   },
   scheduled(_controller, env, ctx) {
     ctx.waitUntil(
-      oauthProvider.purgeExpiredData(env, { batchSize: 100 }).then((result) => {
+      (async () => {
+        // Persist the sweep cursor so nightly cleanup can cover more than one batch.
+        const cursorKey = "orbit_mcp:oauth_purge_cursor";
+        const cursor = (await env.OAUTH_KV.get(cursorKey)) ?? undefined;
+        const result = await oauthProvider.purgeExpiredData(env, { batchSize: 100, cursor });
+        if (result.cursor) {
+          await env.OAUTH_KV.put(cursorKey, result.cursor);
+        } else {
+          await env.OAUTH_KV.delete(cursorKey);
+        }
         console.log(JSON.stringify({ event: "orbit_mcp.oauth_cleanup", ...result }));
-      }),
+      })(),
     );
   },
 } satisfies ExportedHandler<Env>;
